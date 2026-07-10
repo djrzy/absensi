@@ -52,6 +52,16 @@
         </div>
     @endif
 
+    @if ($isLocked && !$holidayDescription)
+        <div
+            class="mb-4 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-medium flex justify-between items-center shadow-2xs animate-fade-in">
+            <span>🔒 Halaman ini dalam mode <strong>Lihat Data (Read-Only)</strong> karena absensi telah terkunci atau
+                Anda sedang meninjau jadwal pengajar lain.</span>
+            <span
+                class="px-2 py-0.5 bg-amber-100 text-amber-900 rounded font-bold text-[10px] uppercase">Terproteksi</span>
+        </div>
+    @endif
+
     <div
         class="bg-white rounded-2xl shadow-xs border border-gray-100 overflow-hidden {{ $isLocked ? 'opacity-70 pointer-events-none' : '' }}">
         <div class="overflow-x-auto">

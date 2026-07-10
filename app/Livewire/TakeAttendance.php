@@ -30,14 +30,14 @@ class TakeAttendance extends Component
         $this->schedule = Schedule::with(['classroom.students', 'subject'])->findOrFail($scheduleId);
         $this->date = Carbon::today()->toDateString();
 
-        // PENGUATAN: Validasi Hak Akses Guru Pengajar
-        // Guru yang masuk harus merupakan pemilik jadwal ATAU jika dia guru piket, jadwal tersebut memang belum di-absen
         $currentTeacherId = auth()->id();
+        $currentUserRole = auth()->user()->role; // Ambil role user aktif
 
         $isFilled = Attendance::where('schedule_id', $this->scheduleId)->where('date', $this->date)->exists();
 
-        if ($this->schedule->teacher_id !== $currentTeacherId && $isFilled) {
-            // Jika bukan pemilik jadwal DAN jadwal itu sudah terisi oleh orang lain, blokir aksesnya
+        // --- PENGUATAN LOGIKA HAK AKSES ---
+        // HANYA blokir jika user yang masuk BUKAN Admin, BUKAN pemilik jadwal, DAN jadwal tersebut sudah diisi.
+        if ($currentUserRole !== 'Admin' && $this->schedule->teacher_id !== $currentTeacherId && $isFilled) {
             session()->flash('error', 'Anda tidak memiliki hak akses untuk mengubah presensi di kelas ini.');
             return redirect('/dashboard');
         }
@@ -64,7 +64,13 @@ class TakeAttendance extends Component
 
         if ($existingAttendance) {
             $this->notes = $existingAttendance->notes;
-            $this->isLocked = $existingAttendance->is_locked;
+
+            // Jika absensi sudah dikunci permanen ATAU user yang masuk bukan Admin/pemilik jadwal, set Read-Only
+            if ($existingAttendance->is_locked || ($currentUserRole !== 'Admin' && $this->schedule->teacher_id !== $currentTeacherId)) {
+                $this->isLocked = true;
+            } else {
+                $this->isLocked = false; // Tetap buka edit mode bagi Admin/Pemilik Jadwal selama belum dikunci permanen
+            }
 
             foreach ($existingAttendance->details as $detail) {
                 $this->attendanceData[$detail->student_id] = $detail->status;
