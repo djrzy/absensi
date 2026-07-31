@@ -14,9 +14,8 @@ class SubstitutionAttendance extends Component
 
     public function mount()
     {
-        // Simulasi Guru yang sedang login (Guru Piket)
-        // Nanti ganti dengan auth()->id() jika sistem login sudah siap
-        $this->currentTeacherId = User::first()->id;
+        // Ambil ID Guru yang sedang login
+        $this->currentTeacherId = auth()->id() ?? User::first()->id;
 
         $this->loadSchedules();
     }
@@ -25,9 +24,10 @@ class SubstitutionAttendance extends Component
     {
         $hariIni = now()->locale('id')->dayName;
 
-        // 1. Ambil semua jadwal yang berlangsung HARI INI
+        // 1. Ambil jadwal HARI INI khusus untuk GURU LAIN (Bukan guru yang sedang login)
         $allTodaySchedules = Schedule::with(['classroom', 'subject', 'teacher'])
             ->where('day', $hariIni)
+            ->where('teacher_id', '!=', $this->currentTeacherId) // 👈 FILTER UTAMA: Kecualikan kelas sendiri
             ->orderBy('period_start', 'asc')
             ->get();
 
@@ -36,8 +36,7 @@ class SubstitutionAttendance extends Component
             ->pluck('schedule_id')
             ->toArray();
 
-        // 3. Filter jadwal: Masukkan ke daftar jika BELUM diabsen
-        // Ini memberi ruang untuk guru piket menggantikan kelas yang kosong
+        // 3. Filter: Hanya tampilkan kelas guru lain yang BELUM diisi absensinya
         $this->availableSchedules = $allTodaySchedules->filter(function ($schedule) use ($filledAttendanceScheduleIds) {
             return !in_array($schedule->id, $filledAttendanceScheduleIds);
         });
@@ -45,8 +44,6 @@ class SubstitutionAttendance extends Component
 
     public function takeOver($scheduleId)
     {
-        // Arahkan langsung ke lembar absensi yang sudah kita buat sebelumnya
-        // Karena di fungsi save() TakeAttendance, teacher_id akan otomatis mencatat siapa yang login/mengisi absen!
         return redirect()->route('absensi.take', ['scheduleId' => $scheduleId]);
     }
 

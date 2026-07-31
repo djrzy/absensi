@@ -5,24 +5,32 @@ namespace App\Livewire;
 use App\Models\Schedule;
 use App\Models\Attendance;
 use App\Models\AttendanceDetail;
+use App\Models\AcademicCalendar;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class TakeAttendance extends Component
 {
+    use WithFileUploads;
+
     public $scheduleId;
     public $schedule;
     public $date;
     public $notes;
     public $isLocked = false;
-    public $isLateForAttendance = false; // Deteksi apakah guru telat buka absen
+    public $isLateForAttendance = false;
+
+    public $photoProof;    // Tempat file foto baru dari kamera
+    public $existingPhoto; // Tempat foto yang sudah tersimpan sebelumnya
 
     public $attendanceData = [];
     public $studentNotes = [];
     public $holidayDescription = null;
 
-    public $inheritedStatuses = []; // Array untuk menampung tanda status warisan jam sebelumnya
+    public $inheritedStatuses = [];
 
     public function mount($scheduleId)
     {
@@ -31,32 +39,32 @@ class TakeAttendance extends Component
         $this->date = Carbon::today()->toDateString();
 
         $currentTeacherId = auth()->id();
-        $currentUserRole = auth()->user()->role; // Ambil role user aktif
+        $currentUserRole = auth()->user()->role ?? '';
 
-        $isFilled = Attendance::where('schedule_id', $this->scheduleId)->where('date', $this->date)->exists();
+        $isOwner = $this->schedule->teacher_id === $currentTeacherId;
+        // Izinkan Owner, Admin, atau siapapun dengan Role Guru/Piket untuk mengajar/menggantikan
+        $canTakeAttendance = $isOwner || in_array($currentUserRole, ['Admin', 'Guru', 'Piket', 'GuruPiket']);
 
-        // --- PENGUATAN LOGIKA HAK AKSES ---
-        // HANYA blokir jika user yang masuk BUKAN Admin, BUKAN pemilik jadwal, DAN jadwal tersebut sudah diisi.
-        if ($currentUserRole !== 'Admin' && $this->schedule->teacher_id !== $currentTeacherId && $isFilled) {
-            session()->flash('error', 'Anda tidak memiliki hak akses untuk mengubah presensi di kelas ini.');
+        if (!$canTakeAttendance) {
+            session()->flash('error', 'Anda tidak memiliki hak akses untuk membuka presensi di kelas ini.');
             return redirect('/dashboard');
         }
 
-        // --- CHECK KALENDER AKADEMIK (HARI LIBUR) ---
-        $holiday = \App\Models\AcademicCalendar::where('date', $this->date)->first();
+        // Cek Kalender Akademik (Libur)
+        $holiday = AcademicCalendar::where('date', $this->date)->first();
         if ($holiday) {
             $this->isLocked = true;
             $this->holidayDescription = $holiday->description;
         }
 
-        // Cek toleransi keterlambatan jadwal
+        // Indikator Keterlambatan Pengisian (Lebih dari 15 menit)
         $currentTime = Carbon::now();
         $scheduleStartTime = Carbon::parse($this->schedule->time_start);
         if ($currentTime->greaterThan($scheduleStartTime->copy()->addMinutes(15)) && $currentTime->toDateString() == $this->date) {
             $this->isLateForAttendance = true;
         }
 
-        // Cek record absensi yang sudah ada
+        // Load data absensi jika sudah pernah diisi sebelumnya
         $existingAttendance = Attendance::where('schedule_id', $this->scheduleId)
             ->where('date', $this->date)
             ->with('details')
@@ -64,12 +72,11 @@ class TakeAttendance extends Component
 
         if ($existingAttendance) {
             $this->notes = $existingAttendance->notes;
+            $this->existingPhoto = $existingAttendance->photo_proof ?? null;
 
-            // Jika absensi sudah dikunci permanen ATAU user yang masuk bukan Admin/pemilik jadwal, set Read-Only
-            if ($existingAttendance->is_locked || ($currentUserRole !== 'Admin' && $this->schedule->teacher_id !== $currentTeacherId)) {
+            // Kunci jika status sudah is_locked = true
+            if ($existingAttendance->is_locked) {
                 $this->isLocked = true;
-            } else {
-                $this->isLocked = false; // Tetap buka edit mode bagi Admin/Pemilik Jadwal selama belum dikunci permanen
             }
 
             foreach ($existingAttendance->details as $detail) {
@@ -77,7 +84,7 @@ class TakeAttendance extends Component
                 $this->studentNotes[$detail->student_id] = $detail->notes;
             }
         } else {
-            // Logika Cross-Period Auto-Fill untuk jadwal kosong
+            // Pengisian baru: Cek status warisan dari jam sebelumnya di hari yang sama
             foreach ($this->schedule->classroom->students as $student) {
                 $priorAttendanceDetail = AttendanceDetail::whereHas('attendance', function ($query) {
                     $query->where('date', $this->date);
@@ -99,7 +106,6 @@ class TakeAttendance extends Component
         }
     }
 
-    // Fitur khusus untuk Admin atau Guru guna mengunci absensi secara permanen
     public function lockAttendance()
     {
         $existingAttendance = Attendance::where('schedule_id', $this->scheduleId)
@@ -111,19 +117,18 @@ class TakeAttendance extends Component
             $this->isLocked = true;
             session()->flash('success', 'Absensi kelas ini telah resmi DIKUNCI secara permanen.');
         } else {
-            session()->flash('error', 'Silahkan isi dan simpan absensi terlebih dahulu sebelum dikunci.');
+            session()->flash('error', 'Silakan isi dan simpan absensi terlebih dahulu sebelum dikunci.');
         }
     }
 
     public function save()
     {
-        // --- LOGIKA 2: VALIDASI KUNCI ABSENSI ---
         if ($this->isLocked) {
             session()->flash('error', 'Gagal! Absensi hari ini sudah dikunci dan tidak dapat diubah lagi.');
             return;
         }
 
-        // Validasi pengisian kosong
+        // Validasi ketersediaan status presensi seluruh siswa
         foreach ($this->schedule->classroom->students as $student) {
             if (!isset($this->attendanceData[$student->id]) || is_null($this->attendanceData[$student->id])) {
                 session()->flash('error', 'Mohon isi semua absensi siswa sebelum menyimpan!');
@@ -131,12 +136,41 @@ class TakeAttendance extends Component
             }
         }
 
+        // Validasi Foto: Wajib jika BELUM pernah ada foto tersimpan sebelumnya
+        $photoRules = $this->existingPhoto ? 'nullable|image|max:5120' : 'required|image|max:5120';
+
+        $this->validate([
+            'photoProof' => $photoRules,
+        ], [
+            'photoProof.required' => 'Mohon ambil atau unggah foto bukti mengajar di kelas terlebih dahulu sebelum menyimpan.',
+            'photoProof.image'    => 'File bukti harus berupa foto/gambar.',
+            'photoProof.max'      => 'Ukuran foto maksimal adalah 5MB.',
+        ]);
+
         DB::transaction(function () {
+            $photoPath = $this->existingPhoto;
+
+            // Simpan foto baru jika ada upload baru dari kamera
+            if ($this->photoProof) {
+                // Hapus foto lama jika ada
+                if ($this->existingPhoto && Storage::disk('public')->exists($this->existingPhoto)) {
+                    Storage::disk('public')->delete($this->existingPhoto);
+                }
+
+                $photoPath = $this->photoProof->store('attendance_proofs', 'public');
+            }
+
+            // Simpan / Update Header Absensi (mencatat auth()->id() sebagai pengisi)
             $attendance = Attendance::updateOrCreate(
                 ['schedule_id' => $this->scheduleId, 'date' => $this->date],
-                ['teacher_id' => auth()->id() ?: $this->schedule->teacher_id, 'notes' => $this->notes]
+                [
+                    'teacher_id'  => auth()->id() ?: $this->schedule->teacher_id,
+                    'notes'       => $this->notes,
+                    'photo_proof' => $photoPath
+                ]
             );
 
+            // Simpan / Update Detail Absensi Per Siswa
             foreach ($this->attendanceData as $studentId => $status) {
                 AttendanceDetail::updateOrCreate(
                     ['attendance_id' => $attendance->id, 'student_id' => $studentId],
@@ -145,7 +179,27 @@ class TakeAttendance extends Component
             }
         });
 
-        session()->flash('success', 'Absensi berhasil disimpan!');
+        session()->flash('success', 'Absensi dan foto bukti mengajar berhasil disimpan!');
+    }
+
+    public function setAllHadir()
+    {
+        if ($this->isLocked) return;
+
+        foreach ($this->schedule->classroom->students as $student) {
+            $this->attendanceData[$student->id] = 'Hadir';
+        }
+
+        session()->flash('success', 'Berhasil menandai SEMUA SISWA sebagai Hadir. Silakan ubah siswa yang berhalangan jika ada.');
+    }
+
+    public function resetAllStatus()
+    {
+        if ($this->isLocked) return;
+
+        foreach ($this->schedule->classroom->students as $student) {
+            $this->attendanceData[$student->id] = null;
+        }
     }
 
     public function render()

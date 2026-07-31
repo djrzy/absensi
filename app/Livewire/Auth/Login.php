@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 class Login extends Component
 {
     public $email;
-    public $password;
+    public $password = 'password';
 
     public function login()
     {
@@ -23,7 +23,7 @@ class Login extends Component
             // Redirect cerdas berdasarkan Role
             $user = Auth::user();
             if ($user->role === 'Admin') {
-                return redirect()->intended('/admin/kelas');
+                return redirect()->intended('/admin/tahun-ajaran');
             } elseif ($user->role === 'Guru') {
                 return redirect()->intended('/dashboard');
             }

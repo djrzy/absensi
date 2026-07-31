@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Livewire\Admin;
+namespace App\Livewire\Teacher;
 
 use App\Models\Classroom;
 use App\Models\Student;
@@ -13,12 +13,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class AttendanceReport extends Component
+class ClassroomWaliReport extends Component
 {
-    public $classrooms;
-    public $selectedClassroomId;
+    public $myClassroom; // Kelas bimbingan wali kelas ini
 
-    // Filter Rentang Bulan (Month Range)
+    // Filter Rentang Bulan
     public $startMonth;
     public $endMonth;
 
@@ -27,8 +26,9 @@ class AttendanceReport extends Component
     public function mount()
     {
         Carbon::setLocale('id');
-        $this->classrooms = Classroom::orderBy('name')->get();
-        $this->selectedClassroomId = $this->classrooms->first()?->id;
+
+        // Otomatis kuncikan ke kelas di mana Guru ini menjabat sebagai Wali Kelas (teacher_id)
+        $this->myClassroom = Classroom::where('teacher_id', auth()->id())->first();
 
         // Default rentang: Bulan saat ini
         $currentMonth = Carbon::now()->format('Y-m');
@@ -38,10 +38,6 @@ class AttendanceReport extends Component
         $this->generateReport();
     }
 
-    public function updatedSelectedClassroomId()
-    {
-        $this->generateReport();
-    }
     public function updatedStartMonth()
     {
         $this->generateReport();
@@ -53,46 +49,48 @@ class AttendanceReport extends Component
 
     public function generateReport()
     {
-        if (!$this->selectedClassroomId || !$this->startMonth || !$this->endMonth) return;
+        if (!$this->myClassroom || !$this->startMonth || !$this->endMonth) {
+            $this->reportData = [];
+            return;
+        }
 
-        // Validasi jika startMonth > endMonth, samakan endMonth dengan startMonth
+        // Validasi format YYYY-MM
+        if (!preg_match('/^\d{4}-\d{2}$/', $this->startMonth) || !preg_match('/^\d{4}-\d{2}$/', $this->endMonth)) {
+            return;
+        }
+
         if (strcmp($this->startMonth, $this->endMonth) > 0) {
             $this->endMonth = $this->startMonth;
         }
 
-        // Tambahkan '-01' secara eksplisit sebelum di-parse oleh Carbon untuk cegah overflow
         $startCarbon = Carbon::parse($this->startMonth . '-01')->startOfMonth();
         $endCarbon   = Carbon::parse($this->endMonth . '-01')->endOfMonth();
 
         $startDateStr = $startCarbon->format('Y-m-d');
         $endDateStr   = $endCarbon->format('Y-m-d');
 
-        $students = Student::where('classroom_id', $this->selectedClassroomId)->orderBy('name')->get();
+        // Tarik seluruh siswa di kelas bimbingan ini
+        $students = Student::where('classroom_id', $this->myClassroom->id)->orderBy('name')->get();
 
-        // =========================================================================
-        // OPTIMASI PERFORMANCE: TARIK DATA DENGAN EAGER LOADING & MAP KE O(1) LOOKUP
-        // =========================================================================
-        $rawDetails = AttendanceDetail::with([
+        // Ambil data absensi SELURUH MAPEL untuk kelas ini
+        $attendanceDetails = AttendanceDetail::with([
             'attendance.teacher',
             'attendance.schedule.subject'
         ])
             ->whereHas('attendance', function ($query) use ($startDateStr, $endDateStr) {
-                $query->whereBetween('date', [$startDateStr, $endDateStr]);
+                $query->whereHas('schedule', function ($q) {
+                    $q->where('classroom_id', $this->myClassroom->id);
+                })->whereBetween('date', [$startDateStr, $endDateStr]);
             })
             ->whereIn('student_id', $students->pluck('id'))
-            ->get();
-
-        // Grouping menggunakan Composite Key Unique: "student_id_YYYY-MM-DD"
-        // Dengan ini, pencarian di dalam looping tanggal 1-31 bernilai O(1) INSTANT!
-        $attendanceLookup = $rawDetails->groupBy(function ($item) {
-            return $item->student_id . '_' . $item->attendance->date;
-        });
+            ->get()
+            ->groupBy('student_id');
 
         $holidayDates = AcademicCalendar::whereBetween('date', [$startDateStr, $endDateStr])
             ->pluck('description', 'date')
             ->toArray();
 
-        // --- GENERATE LIST BULAN DALAM RENTANG ---
+        // Generate List Bulan
         $startYear  = (int) $startCarbon->year;
         $startMonth = (int) $startCarbon->month;
         $endYear    = (int) $endCarbon->year;
@@ -106,11 +104,11 @@ class AttendanceReport extends Component
             $dateObj = Carbon::createFromDate($y, $m, 1)->locale('id');
 
             $monthsInRange[] = [
-                'key'               => $dateObj->format('Y-m'),
-                'label'             => $dateObj->translatedFormat('F Y'),
-                'year'              => $y,
-                'month'             => $m,
-                'days_count'        => $dateObj->daysInMonth,
+                'key' => $dateObj->format('Y-m'),
+                'label' => $dateObj->translatedFormat('F Y'),
+                'year' => $y,
+                'month' => $m,
+                'days_count' => $dateObj->daysInMonth,
                 'first_day_of_week' => $dateObj->dayOfWeekIso
             ];
 
@@ -124,6 +122,8 @@ class AttendanceReport extends Component
         $this->reportData = [];
 
         foreach ($students as $student) {
+            $studentAttendance = $attendanceDetails->get($student->id) ?? collect();
+
             $summaryTotal = ['Hadir' => 0, 'Terlambat' => 0, 'Sakit' => 0, 'Izin' => 0, 'Alpa' => 0];
             $monthlyBreakdown = [];
 
@@ -138,9 +138,7 @@ class AttendanceReport extends Component
                     $fullDate = "{$yearNum}-{$monthStr}-{$dayStr}";
                     $carbonDate = Carbon::createFromDate($yearNum, $monthNum, $d);
 
-                    // INSTANT O(1) LOOKUP TANPA FILTER LOOPING MANUAL
-                    $lookupKey = $student->id . '_' . $fullDate;
-                    $dayRecords = $attendanceLookup->get($lookupKey, collect());
+                    $dayRecords = $studentAttendance->filter(fn($detail) => $detail->attendance->date == $fullDate);
 
                     if ($dayRecords->isNotEmpty()) {
                         $totalJam = $dayRecords->count();
@@ -150,16 +148,17 @@ class AttendanceReport extends Component
                         foreach ($dayRecords as $record) {
                             $countStatus[$record->status]++;
                             $sessionDetails[] = [
-                                'period'   => $record->attendance->schedule->period_start ?? '-',
-                                'subject'  => $record->attendance->schedule->subject->name ?? 'Mapel',
-                                'time'     => substr($record->attendance->schedule->time_start ?? '00:00', 0, 5) . ' - ' . substr($record->attendance->schedule->time_end ?? '00:00', 0, 5),
-                                'status'   => $record->status,
-                                'notes'    => $record->notes ?? '-',
+                                'period' => $record->attendance->schedule->period_start ?? '-',
+                                'subject' => $record->attendance->schedule->subject->name ?? 'Mapel',
+                                'time' => substr($record->attendance->schedule->time_start ?? '00:00', 0, 5) . ' - ' . substr($record->attendance->schedule->time_end ?? '00:00', 0, 5),
+                                'status' => $record->status,
+                                'notes' => $record->notes ?? '-',
                                 'input_by' => $record->attendance->teacher->name ?? 'Sistem / Guru Piket',
                                 'input_at' => $record->created_at ? $record->created_at->format('H:i') . ' WIB' : '-'
                             ];
                         }
 
+                        // Penentuan status akhir harian (gabungan jam pelajaran)
                         $totalHadirDanTelat = $countStatus['Hadir'] + $countStatus['Terlambat'];
                         if (($totalHadirDanTelat / $totalJam) >= 0.5) {
                             $finalStatus = $countStatus['Hadir'] >= $countStatus['Terlambat'] ? 'Hadir' : 'Terlambat';
@@ -169,12 +168,12 @@ class AttendanceReport extends Component
                         }
 
                         $daysStatus[$d] = [
-                            'day_num'      => $d,
-                            'letter'       => substr($finalStatus, 0, 1),
-                            'status'       => $finalStatus,
-                            'details'      => $sessionDetails,
+                            'day_num' => $d,
+                            'letter' => substr($finalStatus, 0, 1),
+                            'status' => $finalStatus,
+                            'details' => $sessionDetails,
                             'student_name' => $student->name,
-                            'date_text'    => Carbon::parse($fullDate)->locale('id')->translatedFormat('l, d F Y')
+                            'date_text' => Carbon::parse($fullDate)->locale('id')->translatedFormat('l, d F Y')
                         ];
 
                         $summaryTotal[$finalStatus]++;
@@ -187,7 +186,6 @@ class AttendanceReport extends Component
                     }
                 }
 
-                // Grid kalender presisi per bulan
                 $grid = [];
                 for ($i = 1; $i < $mInfo['first_day_of_week']; $i++) {
                     $grid[] = ['is_empty' => true];
@@ -198,7 +196,7 @@ class AttendanceReport extends Component
                 }
 
                 $monthlyBreakdown[$mInfo['key']] = [
-                    'label'         => $mInfo['label'],
+                    'label' => $mInfo['label'],
                     'calendar_grid' => $grid
                 ];
             }
@@ -208,10 +206,10 @@ class AttendanceReport extends Component
             $percentage = $totalActiveDays > 0 ? round(($totalAttended / $totalActiveDays) * 100) : 100;
 
             $this->reportData[] = [
-                'nisn'              => $student->nisn,
-                'name'              => $student->name,
-                'summary'           => $summaryTotal,
-                'percentage'        => $percentage,
+                'nisn' => $student->nisn,
+                'name' => $student->name,
+                'summary' => $summaryTotal,
+                'percentage' => $percentage,
                 'monthly_breakdown' => $monthlyBreakdown
             ];
         }
@@ -219,10 +217,9 @@ class AttendanceReport extends Component
 
     public function exportExcel()
     {
-        if (empty($this->reportData)) return;
+        if (empty($this->reportData) || !$this->myClassroom) return;
 
-        $classroom = Classroom::with('waliKelas')->find($this->selectedClassroomId);
-        $className = $classroom->name ?? 'Kelas';
+        $className = $this->myClassroom->name;
 
         $startText = Carbon::parse($this->startMonth . '-01')->locale('id')->translatedFormat('F Y');
         $endText   = Carbon::parse($this->endMonth . '-01')->locale('id')->translatedFormat('F Y');
@@ -230,15 +227,13 @@ class AttendanceReport extends Component
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Rekap Presensi Range');
+        $sheet->setTitle('Rekap Wali Kelas');
 
-        // KOP Header Laporan
-        $sheet->setCellValue('A1', 'REKAPITULASI PRESENSI SISWA');
+        $sheet->setCellValue('A1', 'LAPORAN REKAPITULASI PRESENSI SISWA (WALI KELAS)');
         $sheet->setCellValue('A2', 'Kelas: ' . $className . ' | Periode: ' . $periodeText);
-        $sheet->setCellValue('A3', 'Wali Kelas: ' . ($classroom->waliKelas->name ?? '-'));
+        $sheet->setCellValue('A3', 'Wali Kelas: ' . auth()->user()->name);
         $sheet->getStyle('A1:A3')->getFont()->setBold(true);
 
-        // Header Tabel
         $sheet->setCellValue('A5', 'NO');
         $sheet->setCellValue('B5', 'NISN');
         $sheet->setCellValue('C5', 'NAMA SISWA');
@@ -249,7 +244,6 @@ class AttendanceReport extends Component
         $sheet->setCellValue('H5', 'ALPA (A)');
         $sheet->setCellValue('I5', '% KEHADIRAN');
 
-        // Data Row
         $row = 6;
         foreach ($this->reportData as $idx => $st) {
             $sheet->setCellValue('A' . $row, $idx + 1);
@@ -264,7 +258,6 @@ class AttendanceReport extends Component
             $row++;
         }
 
-        // Format Excel Styling
         $sheet->getStyle("A5:I5")->getFont()->setBold(true);
         $sheet->getStyle("A5:I5")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E2E8F0');
 
@@ -272,7 +265,7 @@ class AttendanceReport extends Component
             'borders' => [
                 'allBorders' => [
                     'borderStyle' => Border::BORDER_THIN,
-                    'color'       => ['argb' => 'CBD5E1'],
+                    'color' => ['argb' => 'CBD5E1'],
                 ],
             ],
         ];
@@ -288,7 +281,7 @@ class AttendanceReport extends Component
         $sheet->getColumnDimension('H')->setWidth(12);
         $sheet->getColumnDimension('I')->setWidth(15);
 
-        $filename = "Rekap_Presensi_{$className}_{$this->startMonth}_sd_{$this->endMonth}.xlsx";
+        $filename = "Rekap_WaliKelas_{$className}_{$this->startMonth}_sd_{$this->endMonth}.xlsx";
 
         return response()->streamDownload(function () use ($spreadsheet) {
             $writer = new Xlsx($spreadsheet);
@@ -298,16 +291,13 @@ class AttendanceReport extends Component
 
     public function render()
     {
-        $selectedClassroom = Classroom::with('waliKelas')->find($this->selectedClassroomId);
-
         $startText = Carbon::parse($this->startMonth . '-01')->locale('id')->translatedFormat('F Y');
         $endText   = Carbon::parse($this->endMonth . '-01')->locale('id')->translatedFormat('F Y');
 
         $periodeText = ($this->startMonth === $this->endMonth) ? $startText : "{$startText} - {$endText}";
 
-        return view('livewire.admin.attendance-report', [
-            'selectedClassroom' => $selectedClassroom,
-            'periodeText'       => $periodeText
+        return view('livewire.teacher.classroom-wali-report', [
+            'periodeText' => $periodeText
         ]);
     }
 }

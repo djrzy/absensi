@@ -10,6 +10,10 @@ class Student extends Model
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'bio_details' => 'array', // Otomatis convert JSON ke Array
+    ];
+
     public function classroom(): BelongsTo
     {
         return $this->belongsTo(Classroom::class);

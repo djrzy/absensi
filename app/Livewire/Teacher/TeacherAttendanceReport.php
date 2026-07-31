@@ -1,8 +1,10 @@
 <?php
 
-namespace App\Livewire\Admin;
+namespace App\Livewire\Teacher;
 
+use App\Models\Schedule;
 use App\Models\Classroom;
+use App\Models\Subject;
 use App\Models\Student;
 use App\Models\AttendanceDetail;
 use App\Models\AcademicCalendar;
@@ -13,12 +15,16 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class AttendanceReport extends Component
+class TeacherAttendanceReport extends Component
 {
-    public $classrooms;
-    public $selectedClassroomId;
+    // Filter State Dependent Dropdown
+    public $availableClassrooms = []; // List Kelas Unik Guru Ini
+    public $availableSubjects = [];   // List Mapel Unik di Kelas Terpilih
 
-    // Filter Rentang Bulan (Month Range)
+    public $selectedClassroomId = null;
+    public $selectedSubjectId = null;
+
+    // Filter Rentang Bulan
     public $startMonth;
     public $endMonth;
 
@@ -27,8 +33,23 @@ class AttendanceReport extends Component
     public function mount()
     {
         Carbon::setLocale('id');
-        $this->classrooms = Classroom::orderBy('name')->get();
-        $this->selectedClassroomId = $this->classrooms->first()?->id;
+
+        // 1. Ambil seluruh jadwal mengajar milik guru yang sedang login
+        $teacherSchedules = Schedule::with(['classroom', 'subject'])
+            ->where('teacher_id', auth()->id())
+            ->get();
+
+        // 2. Extract daftar Kelas Unik yang diampu
+        $this->availableClassrooms = $teacherSchedules
+            ->pluck('classroom')
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        if ($this->availableClassrooms->isNotEmpty()) {
+            $this->selectedClassroomId = $this->availableClassrooms->first()->id;
+            $this->loadSubjectsForSelectedClassroom($teacherSchedules);
+        }
 
         // Default rentang: Bulan saat ini
         $currentMonth = Carbon::now()->format('Y-m');
@@ -38,7 +59,18 @@ class AttendanceReport extends Component
         $this->generateReport();
     }
 
+    // Pemicu saat kelas diubah -> Update daftar Mapel (Dependent Dropdown)
     public function updatedSelectedClassroomId()
+    {
+        $teacherSchedules = Schedule::with(['classroom', 'subject'])
+            ->where('teacher_id', auth()->id())
+            ->get();
+
+        $this->loadSubjectsForSelectedClassroom($teacherSchedules);
+        $this->generateReport();
+    }
+
+    public function updatedSelectedSubjectId()
     {
         $this->generateReport();
     }
@@ -51,48 +83,82 @@ class AttendanceReport extends Component
         $this->generateReport();
     }
 
+    private function loadSubjectsForSelectedClassroom($teacherSchedules)
+    {
+        if (!$this->selectedClassroomId) {
+            $this->availableSubjects = collect();
+            $this->selectedSubjectId = null;
+            return;
+        }
+
+        // Filter Mapel Unik khusus di kelas yang dipilih
+        $this->availableSubjects = $teacherSchedules
+            ->where('classroom_id', $this->selectedClassroomId)
+            ->pluck('subject')
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        if ($this->availableSubjects->isNotEmpty()) {
+            // Jika mapel saat ini tidak ada di kelas baru, set ke mapel pertama
+            if (!$this->availableSubjects->contains('id', $this->selectedSubjectId)) {
+                $this->selectedSubjectId = $this->availableSubjects->first()->id;
+            }
+        } else {
+            $this->selectedSubjectId = null;
+        }
+    }
+
     public function generateReport()
     {
-        if (!$this->selectedClassroomId || !$this->startMonth || !$this->endMonth) return;
+        if (!$this->selectedClassroomId || !$this->selectedSubjectId || !$this->startMonth || !$this->endMonth) {
+            $this->reportData = [];
+            return;
+        }
 
-        // Validasi jika startMonth > endMonth, samakan endMonth dengan startMonth
+        // Validasi format YYYY-MM
+        if (!preg_match('/^\d{4}-\d{2}$/', $this->startMonth) || !preg_match('/^\d{4}-\d{2}$/', $this->endMonth)) {
+            return;
+        }
+
         if (strcmp($this->startMonth, $this->endMonth) > 0) {
             $this->endMonth = $this->startMonth;
         }
 
-        // Tambahkan '-01' secara eksplisit sebelum di-parse oleh Carbon untuk cegah overflow
+        // Cari seluruh schedule_id milik guru ini untuk kelas & mapel terpilih (Misal jadwal Senin & Kamis)
+        $relevantScheduleIds = Schedule::where('teacher_id', auth()->id())
+            ->where('classroom_id', $this->selectedClassroomId)
+            ->where('subject_id', $this->selectedSubjectId)
+            ->pluck('id')
+            ->toArray();
+
         $startCarbon = Carbon::parse($this->startMonth . '-01')->startOfMonth();
         $endCarbon   = Carbon::parse($this->endMonth . '-01')->endOfMonth();
 
         $startDateStr = $startCarbon->format('Y-m-d');
         $endDateStr   = $endCarbon->format('Y-m-d');
 
+        // Tarik Siswa di kelas terkait
         $students = Student::where('classroom_id', $this->selectedClassroomId)->orderBy('name')->get();
 
-        // =========================================================================
-        // OPTIMASI PERFORMANCE: TARIK DATA DENGAN EAGER LOADING & MAP KE O(1) LOOKUP
-        // =========================================================================
-        $rawDetails = AttendanceDetail::with([
+        // Ambil data absensi
+        $attendanceDetails = AttendanceDetail::with([
             'attendance.teacher',
             'attendance.schedule.subject'
         ])
-            ->whereHas('attendance', function ($query) use ($startDateStr, $endDateStr) {
-                $query->whereBetween('date', [$startDateStr, $endDateStr]);
+            ->whereHas('attendance', function ($query) use ($relevantScheduleIds, $startDateStr, $endDateStr) {
+                $query->whereIn('schedule_id', $relevantScheduleIds)
+                    ->whereBetween('date', [$startDateStr, $endDateStr]);
             })
             ->whereIn('student_id', $students->pluck('id'))
-            ->get();
-
-        // Grouping menggunakan Composite Key Unique: "student_id_YYYY-MM-DD"
-        // Dengan ini, pencarian di dalam looping tanggal 1-31 bernilai O(1) INSTANT!
-        $attendanceLookup = $rawDetails->groupBy(function ($item) {
-            return $item->student_id . '_' . $item->attendance->date;
-        });
+            ->get()
+            ->groupBy('student_id');
 
         $holidayDates = AcademicCalendar::whereBetween('date', [$startDateStr, $endDateStr])
             ->pluck('description', 'date')
             ->toArray();
 
-        // --- GENERATE LIST BULAN DALAM RENTANG ---
+        // Generate List Bulan
         $startYear  = (int) $startCarbon->year;
         $startMonth = (int) $startCarbon->month;
         $endYear    = (int) $endCarbon->year;
@@ -121,9 +187,14 @@ class AttendanceReport extends Component
             }
         }
 
+        $selectedSubject = Subject::find($this->selectedSubjectId);
+        $subjectName = $selectedSubject->name ?? 'Mapel';
+
         $this->reportData = [];
 
         foreach ($students as $student) {
+            $studentAttendance = $attendanceDetails->get($student->id) ?? collect();
+
             $summaryTotal = ['Hadir' => 0, 'Terlambat' => 0, 'Sakit' => 0, 'Izin' => 0, 'Alpa' => 0];
             $monthlyBreakdown = [];
 
@@ -138,12 +209,9 @@ class AttendanceReport extends Component
                     $fullDate = "{$yearNum}-{$monthStr}-{$dayStr}";
                     $carbonDate = Carbon::createFromDate($yearNum, $monthNum, $d);
 
-                    // INSTANT O(1) LOOKUP TANPA FILTER LOOPING MANUAL
-                    $lookupKey = $student->id . '_' . $fullDate;
-                    $dayRecords = $attendanceLookup->get($lookupKey, collect());
+                    $dayRecords = $studentAttendance->filter(fn($detail) => $detail->attendance->date == $fullDate);
 
                     if ($dayRecords->isNotEmpty()) {
-                        $totalJam = $dayRecords->count();
                         $countStatus = ['Hadir' => 0, 'Terlambat' => 0, 'Sakit' => 0, 'Izin' => 0, 'Alpa' => 0];
                         $sessionDetails = [];
 
@@ -151,21 +219,33 @@ class AttendanceReport extends Component
                             $countStatus[$record->status]++;
                             $sessionDetails[] = [
                                 'period'   => $record->attendance->schedule->period_start ?? '-',
-                                'subject'  => $record->attendance->schedule->subject->name ?? 'Mapel',
+                                'subject'  => $subjectName,
                                 'time'     => substr($record->attendance->schedule->time_start ?? '00:00', 0, 5) . ' - ' . substr($record->attendance->schedule->time_end ?? '00:00', 0, 5),
                                 'status'   => $record->status,
                                 'notes'    => $record->notes ?? '-',
-                                'input_by' => $record->attendance->teacher->name ?? 'Sistem / Guru Piket',
+                                'input_by' => $record->attendance->teacher->name ?? 'Guru Mapel',
                                 'input_at' => $record->created_at ? $record->created_at->format('H:i') . ' WIB' : '-'
                             ];
                         }
 
-                        $totalHadirDanTelat = $countStatus['Hadir'] + $countStatus['Terlambat'];
-                        if (($totalHadirDanTelat / $totalJam) >= 0.5) {
-                            $finalStatus = $countStatus['Hadir'] >= $countStatus['Terlambat'] ? 'Hadir' : 'Terlambat';
+                        // TANPA BOBOT 50%: Ambil status murni yang tercatat di database.
+                        // Jika dalam 1 hari ada 2 jam ganda mapel ini, prioritaskan status tertinggi/dominan.
+                        if ($countStatus['Hadir'] > 0 && $countStatus['Hadir'] >= $countStatus['Terlambat']) {
+                            $finalStatus = 'Hadir';
+                        } elseif ($countStatus['Terlambat'] > 0) {
+                            $finalStatus = 'Terlambat';
                         } else {
-                            $absenceStatuses = ['Alpa' => $countStatus['Alpa'], 'Sakit' => $countStatus['Sakit'], 'Izin' => $countStatus['Izin']];
+                            $absenceStatuses = [
+                                'Sakit' => $countStatus['Sakit'],
+                                'Izin'  => $countStatus['Izin'],
+                                'Alpa'  => $countStatus['Alpa'],
+                            ];
                             $finalStatus = array_search(max($absenceStatuses), $absenceStatuses);
+
+                            // Fallback jika nilai maksimum tetap 0
+                            if ($absenceStatuses[$finalStatus] === 0) {
+                                $finalStatus = $dayRecords->first()->status;
+                            }
                         }
 
                         $daysStatus[$d] = [
@@ -187,7 +267,6 @@ class AttendanceReport extends Component
                     }
                 }
 
-                // Grid kalender presisi per bulan
                 $grid = [];
                 for ($i = 1; $i < $mInfo['first_day_of_week']; $i++) {
                     $grid[] = ['is_empty' => true];
@@ -219,10 +298,13 @@ class AttendanceReport extends Component
 
     public function exportExcel()
     {
-        if (empty($this->reportData)) return;
+        if (empty($this->reportData) || !$this->selectedClassroomId || !$this->selectedSubjectId) return;
 
-        $classroom = Classroom::with('waliKelas')->find($this->selectedClassroomId);
+        $classroom = Classroom::find($this->selectedClassroomId);
+        $subject = Subject::find($this->selectedSubjectId);
+
         $className = $classroom->name ?? 'Kelas';
+        $subjectName = $subject->name ?? 'Mata Pelajaran';
 
         $startText = Carbon::parse($this->startMonth . '-01')->locale('id')->translatedFormat('F Y');
         $endText   = Carbon::parse($this->endMonth . '-01')->locale('id')->translatedFormat('F Y');
@@ -230,15 +312,13 @@ class AttendanceReport extends Component
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Rekap Presensi Range');
+        $sheet->setTitle('Rekap Presensi Mapel');
 
-        // KOP Header Laporan
-        $sheet->setCellValue('A1', 'REKAPITULASI PRESENSI SISWA');
-        $sheet->setCellValue('A2', 'Kelas: ' . $className . ' | Periode: ' . $periodeText);
-        $sheet->setCellValue('A3', 'Wali Kelas: ' . ($classroom->waliKelas->name ?? '-'));
+        $sheet->setCellValue('A1', 'REKAPITULASI PRESENSI MATA PELAJARAN');
+        $sheet->setCellValue('A2', 'Mapel: ' . $subjectName . ' | Kelas: ' . $className . ' | Periode: ' . $periodeText);
+        $sheet->setCellValue('A3', 'Guru Pengampu: ' . auth()->user()->name);
         $sheet->getStyle('A1:A3')->getFont()->setBold(true);
 
-        // Header Tabel
         $sheet->setCellValue('A5', 'NO');
         $sheet->setCellValue('B5', 'NISN');
         $sheet->setCellValue('C5', 'NAMA SISWA');
@@ -249,7 +329,6 @@ class AttendanceReport extends Component
         $sheet->setCellValue('H5', 'ALPA (A)');
         $sheet->setCellValue('I5', '% KEHADIRAN');
 
-        // Data Row
         $row = 6;
         foreach ($this->reportData as $idx => $st) {
             $sheet->setCellValue('A' . $row, $idx + 1);
@@ -264,7 +343,6 @@ class AttendanceReport extends Component
             $row++;
         }
 
-        // Format Excel Styling
         $sheet->getStyle("A5:I5")->getFont()->setBold(true);
         $sheet->getStyle("A5:I5")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E2E8F0');
 
@@ -288,7 +366,7 @@ class AttendanceReport extends Component
         $sheet->getColumnDimension('H')->setWidth(12);
         $sheet->getColumnDimension('I')->setWidth(15);
 
-        $filename = "Rekap_Presensi_{$className}_{$this->startMonth}_sd_{$this->endMonth}.xlsx";
+        $filename = "Rekap_Mapel_{$subjectName}_{$className}_{$this->startMonth}_sd_{$this->endMonth}.xlsx";
 
         return response()->streamDownload(function () use ($spreadsheet) {
             $writer = new Xlsx($spreadsheet);
@@ -298,15 +376,17 @@ class AttendanceReport extends Component
 
     public function render()
     {
-        $selectedClassroom = Classroom::with('waliKelas')->find($this->selectedClassroomId);
+        $selectedClassroom = Classroom::find($this->selectedClassroomId);
+        $selectedSubject = Subject::find($this->selectedSubjectId);
 
         $startText = Carbon::parse($this->startMonth . '-01')->locale('id')->translatedFormat('F Y');
         $endText   = Carbon::parse($this->endMonth . '-01')->locale('id')->translatedFormat('F Y');
 
         $periodeText = ($this->startMonth === $this->endMonth) ? $startText : "{$startText} - {$endText}";
 
-        return view('livewire.admin.attendance-report', [
+        return view('livewire.teacher.teacher-attendance-report', [
             'selectedClassroom' => $selectedClassroom,
+            'selectedSubject'   => $selectedSubject,
             'periodeText'       => $periodeText
         ]);
     }

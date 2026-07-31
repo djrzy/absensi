@@ -31,7 +31,7 @@
                     <!-- Tombol Pemicu Menu -->
                     <button @click="open = !open"
                         class="flex items-center gap-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer outline-none">
-                        <span>🧭 Menu Aplikasi</span>
+                        <span>🧭 Menu</span>
                         <svg class="w-3 h-3 text-gray-400 transition-transform duration-200" :class="{ 'rotate-180': open }"
                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7">
@@ -94,14 +94,33 @@
                                 class="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-indigo-50/50 hover:text-indigo-600 font-medium transition-colors">
                                 <span>📊</span> Rekap Absen
                             </a>
-                        @else
+                            <a href="/admin/pindah-kelas"
+                                class="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-indigo-50/50 hover:text-indigo-600 font-medium transition-colors">
+                                <span>🔄</span> Pindah Kelas / Lulus
+                            </a>
+                        @elseif (auth()->user()->role === 'Guru')
                             <a href="/dashboard"
                                 class="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-blue-50/50 hover:text-blue-600 font-medium transition-colors">
                                 <span>📈</span> Dashboard
                             </a>
+                            <a href="/rekap-mapel"
+                                class="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-blue-50/50 hover:text-blue-600 font-medium transition-colors">
+                                <span>📚</span> Rekap Presensi Mapel
+                            </a>
+
+                            <a href="/rekap-wali-kelas"
+                                class="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-blue-50/50 hover:text-blue-600 font-medium transition-colors">
+                                <span>🏫</span> Rekap Wali Kelas
+                            </a>
+
                             <a href="/piket"
                                 class="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-blue-50/50 hover:text-blue-600 font-medium transition-colors">
                                 <span>🛡️</span> Pusat Piket
+                            </a>
+                        @else
+                            <a href="/dashboard"
+                                class="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-blue-50/50 hover:text-blue-600 font-medium transition-colors">
+                                <span>📈</span> Dashboard
                             </a>
                         @endif
                         <hr class="my-1 border-gray-200">
