@@ -207,6 +207,7 @@
             </div>
 
             <!-- KAMERA & UPLOAD FOTO MULTI-DEVICE (LAPTOP: WEBCAM + FILE UPLOAD | MOBILE: CAMERA CAPTURE) -->
+            <!-- KAMERA & UPLOAD FOTO MULTI-DEVICE WITH RE-CAPTURE CAPABILITY -->
             <div class="space-y-2" x-data="{
                 isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 640,
                 showWebcam: false,
@@ -214,7 +215,7 @@
                 uploadProgress: 0,
                 stream: null,
 
-                // 1. Fungsi Membuka Kamera Webcam Laptop
+                // 1. Buka Kamera / Webcam
                 async startWebcam() {
                     try {
                         this.showWebcam = true;
@@ -223,12 +224,12 @@
                             this.$refs.video.srcObject = this.stream;
                         });
                     } catch (err) {
-                        alert('Tidak dapat mengakses webcam laptop. Silakan periksa izin kamera browser atau gunakan tombol Pilih File.');
+                        alert('Tidak dapat mengakses webcam laptop. Silakan periksa izin kamera browser atau gunakan opsi Pilih File.');
                         this.showWebcam = false;
                     }
                 },
 
-                // 2. Fungsi Mengambil Gambar dari Stream Video Webcam
+                // 2. Tangkap Gambar dari Webcam
                 captureWebcam() {
                     const video = this.$refs.video;
                     const canvas = document.createElement('canvas');
@@ -237,10 +238,8 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                    // Matikan stream webcam setelah diambil
                     this.stopWebcam();
 
-                    // Kompres & Kirim ke Livewire
                     canvas.toBlob((blob) => {
                         if (!blob) return;
                         const file = new File([blob], 'webcam-proof.jpg', { type: 'image/jpeg', lastModified: Date.now() });
@@ -248,7 +247,7 @@
                     }, 'image/jpeg', 0.75);
                 },
 
-                // 3. Mematikan Stream Webcam
+                // 3. Hentikan Stream Webcam
                 stopWebcam() {
                     if (this.stream) {
                         this.stream.getTracks().forEach(track => track.stop());
@@ -257,7 +256,7 @@
                     this.showWebcam = false;
                 },
 
-                // 4. Kompresi Client-Side & Upload
+                // 4. Handle Upload & Compress File Gambar
                 handleFileSelect(event) {
                     const file = event.target.files[0];
                     if (!file) return;
@@ -296,7 +295,7 @@
                     };
                 },
 
-                // 5. Kirim File Terkompresi ke Livewire Component
+                // 5. Unggah File Terkompresi ke Livewire
                 uploadFileToLivewire(file) {
                     this.isUploading = true;
                     this.uploadProgress = 10;
@@ -324,11 +323,28 @@
 
                 <div class="bg-white p-3.5 border border-gray-200 rounded-2xl space-y-3 shadow-2xs">
 
-                    <!-- JIKA BELUM ADA FOTO DAN WEBCAM TIDAK AKTIF -->
+                    <!-- MODAL / STREAM WEBCAM (MUNCUL SAAT MENGAMBIL FOTO/GANTI FOTO VIA WEBCAM) -->
+                    <div x-show="showWebcam" x-cloak class="space-y-2">
+                        <div class="relative w-full h-52 bg-black rounded-xl overflow-hidden border border-gray-300">
+                            <video x-ref="video" autoplay playsinline class="w-full h-full object-cover"></video>
+                        </div>
+
+                        <div class="flex gap-2">
+                            <button type="button" @click="captureWebcam()"
+                                class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation">
+                                <span>📸 Tangkap Foto</span>
+                            </button>
+                            <button type="button" @click="stopWebcam()"
+                                class="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-bold transition-all cursor-pointer">
+                                Batal
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- JIKA BELUM ADA FOTO SAMA SEKALI DAN WEBCAM TIDAK AKTIF -->
                     @if (!$photoProof && !$existingPhoto)
                         <div x-show="!showWebcam">
-
-                            <!-- OPSI LAYAR HP / MOBILE DEVICE -->
+                            <!-- TAMPILAN HP -->
                             <template x-if="isMobile">
                                 <label
                                     class="flex items-center justify-center gap-2 w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-bold cursor-pointer transition-all select-none touch-manipulation active:scale-[0.99] {{ $isLocked ? 'opacity-50 pointer-events-none' : '' }}">
@@ -340,7 +356,7 @@
                                 </label>
                             </template>
 
-                            <!-- OPSI LAYAR LAPTOP / DESKTOP DEVICE (2 PILIHAN) -->
+                            <!-- TAMPILAN LAPTOP / DESKTOP (2 PILIHAN UTAMA) -->
                             <template x-if="!isMobile">
                                 <div class="grid grid-cols-2 gap-2.5">
                                     <button type="button" @click="startWebcam()" {{ $isLocked ? 'disabled' : '' }}
@@ -359,28 +375,9 @@
                                 </div>
                             </template>
                         </div>
-
-                        <!-- STREAM VIDEO WEBCAM LIVE PREVIEW (KHUSUS LAPTOP) -->
-                        <div x-show="showWebcam" x-cloak class="space-y-2">
-                            <div
-                                class="relative w-full h-52 bg-black rounded-xl overflow-hidden border border-gray-300">
-                                <video x-ref="video" autoplay playsinline class="w-full h-full object-cover"></video>
-                            </div>
-
-                            <div class="flex gap-2">
-                                <button type="button" @click="captureWebcam()"
-                                    class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer">
-                                    <span>📸 Tangkap Foto</span>
-                                </button>
-                                <button type="button" @click="stopWebcam()"
-                                    class="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-bold transition-all cursor-pointer">
-                                    Batal
-                                </button>
-                            </div>
-                        </div>
                     @endif
 
-                    <!-- PROGRESS BAR PROSES UPLOAD -->
+                    <!-- INDIKATOR PROGRESS UPLOAD -->
                     <div x-show="isUploading" x-cloak
                         class="space-y-1.5 p-2 bg-indigo-50/50 rounded-xl border border-indigo-100">
                         <div class="flex justify-between items-center text-[10px] font-bold text-indigo-700">
@@ -409,71 +406,89 @@
                     @enderror
 
                     <!-- PREVIEW FOTO BARU SIAP DISIMPAN -->
-                    @if ($photoProof && !errors()->has('photoProof'))
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
+                    @if ($photoProof)
+                        <div x-show="!showWebcam" class="space-y-2">
+                            <div class="flex flex-wrap justify-between items-center gap-2">
                                 <span
                                     class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider flex items-center gap-1">
                                     <span>✓</span> Foto Baru Siap Disimpan
                                 </span>
+
                                 @if (!$isLocked)
-                                    <div class="flex items-center gap-2">
-                                        <!-- Pilihan Ganti di HP -->
-                                        <template x-if="isMobile">
+                                    <!-- OPSI GANTI FOTO DI HP -->
+                                    <template x-if="isMobile">
+                                        <label
+                                            class="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline flex items-center gap-1 touch-manipulation">
+                                            <span>🔄 Ganti Foto</span>
+                                            <input type="file" accept="image/*" capture="environment"
+                                                @change="handleFileSelect($event)" class="hidden">
+                                        </label>
+                                    </template>
+
+                                    <!-- OPSI GANTI FOTO DI LAPTOP (WEBCAM / FILE) -->
+                                    <template x-if="!isMobile">
+                                        <div class="flex items-center gap-2 text-[11px]">
+                                            <button type="button" @click="startWebcam()"
+                                                class="text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer">
+                                                📹 Ambil Ulang Webcam
+                                            </button>
+                                            <span class="text-gray-300">|</span>
                                             <label
-                                                class="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline flex items-center gap-1 touch-manipulation">
-                                                <span>🔄 Ganti Foto</span>
-                                                <input type="file" accept="image/*" capture="environment"
-                                                    @change="handleFileSelect($event)" class="hidden">
-                                            </label>
-                                        </template>
-                                        <!-- Pilihan Ganti di Laptop -->
-                                        <template x-if="!isMobile">
-                                            <label
-                                                class="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline flex items-center gap-1 touch-manipulation">
-                                                <span>🔄 Ganti Foto</span>
+                                                class="text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline">
+                                                <span>📁 Ganti File</span>
                                                 <input type="file" accept="image/*"
                                                     @change="handleFileSelect($event)" class="hidden">
                                             </label>
-                                        </template>
-                                    </div>
+                                        </div>
+                                    </template>
                                 @endif
                             </div>
+
                             <div
                                 class="relative w-full h-44 rounded-xl overflow-hidden border border-emerald-200 shadow-2xs">
                                 <img src="{{ $photoProof->temporaryUrl() }}" class="w-full h-full object-cover">
                             </div>
                         </div>
 
-                        <!-- PREVIEW FOTO YANG SUDAH TERSIMPAN DI DATABASE -->
+                        <!-- PREVIEW FOTO TERGANTI / TERSIMPAN DI DATABASE -->
                     @elseif ($existingPhoto)
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
+                        <div x-show="!showWebcam" class="space-y-2">
+                            <div class="flex flex-wrap justify-between items-center gap-2">
                                 <span
                                     class="text-[10px] text-gray-500 font-bold uppercase tracking-wider flex items-center gap-1">
                                     <span>📷</span> Foto Bukti Tersimpan
                                 </span>
+
                                 @if (!$isLocked)
-                                    <div class="flex items-center gap-2">
-                                        <template x-if="isMobile">
+                                    <!-- OPSI GANTI FOTO DI HP -->
+                                    <template x-if="isMobile">
+                                        <label
+                                            class="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline flex items-center gap-1 touch-manipulation">
+                                            <span>🔄 Ambil Ulang Foto</span>
+                                            <input type="file" accept="image/*" capture="environment"
+                                                @change="handleFileSelect($event)" class="hidden">
+                                        </label>
+                                    </template>
+
+                                    <!-- OPSI GANTI FOTO DI LAPTOP (WEBCAM / FILE) -->
+                                    <template x-if="!isMobile">
+                                        <div class="flex items-center gap-2 text-[11px]">
+                                            <button type="button" @click="startWebcam()"
+                                                class="text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer">
+                                                📹 Ambil Ulang Webcam
+                                            </button>
+                                            <span class="text-gray-300">|</span>
                                             <label
-                                                class="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline flex items-center gap-1 touch-manipulation">
-                                                <span>🔄 Ambil Ulang Foto</span>
-                                                <input type="file" accept="image/*" capture="environment"
-                                                    @change="handleFileSelect($event)" class="hidden">
-                                            </label>
-                                        </template>
-                                        <template x-if="!isMobile">
-                                            <label
-                                                class="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline flex items-center gap-1 touch-manipulation">
-                                                <span>🔄 Ambil Ulang Foto</span>
+                                                class="text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline">
+                                                <span>📁 Pilih File Baru</span>
                                                 <input type="file" accept="image/*"
                                                     @change="handleFileSelect($event)" class="hidden">
                                             </label>
-                                        </template>
-                                    </div>
+                                        </div>
+                                    </template>
                                 @endif
                             </div>
+
                             <div
                                 class="relative w-full h-44 rounded-xl overflow-hidden border border-gray-200 shadow-2xs">
                                 <img src="{{ asset('storage/' . $existingPhoto) }}"
