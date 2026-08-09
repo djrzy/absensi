@@ -1,4 +1,4 @@
-<div class="p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="p-4 sm:p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
 
     <!-- KOLOM 1: Form Tambah / Edit Kelas -->
     <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs h-fit">
@@ -44,9 +44,19 @@
                     @enderror
                 </div>
 
-                <button type="submit"
-                    class="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all">
-                    Simpan Kelas
+                <button type="submit" wire:loading.attr="disabled"
+                    class="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all flex items-center justify-center gap-2">
+                    <span wire:loading.remove wire:target="store">Simpan Kelas</span>
+                    <span wire:loading wire:target="store" class="flex items-center gap-1.5">
+                        <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
+                        </svg>
+                        Menyimpan...
+                    </span>
                 </button>
             </form>
         @else
@@ -76,9 +86,10 @@
                 </div>
 
                 <div class="flex gap-2">
-                    <button type="submit"
-                        class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all">
-                        Update Kelas
+                    <button type="submit" wire:loading.attr="disabled"
+                        class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all flex items-center justify-center gap-2">
+                        <span wire:loading.remove wire:target="updateClassroom">Update Kelas</span>
+                        <span wire:loading wire:target="updateClassroom">Updating...</span>
                     </button>
                     <button type="button" wire:click="cancelEdit"
                         class="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold rounded-xl cursor-pointer transition-all">
@@ -90,24 +101,31 @@
     </div>
 
     <!-- KOLOM 2: Daftar Semua Kelas (dengan Pagination) -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden flex flex-col justify-between">
+    <div
+        class="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden flex flex-col justify-between min-h-[350px]">
         <div>
-            <div class="p-4 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
+            <div class="p-4 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center gap-2">
                 <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider">Daftar Kelas</h2>
 
                 <!-- TOMBOL NAVIGASI KE HALAMAN PENETAPAN KELAS MASSAL -->
                 <a href="/admin/penetapan-kelas"
-                    class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1">
+                    class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0">
                     <span>📌 Penetapan Massal →</span>
                 </a>
             </div>
+
             <div class="divide-y divide-gray-50">
                 @forelse ($classrooms as $class)
-                    <div class="p-4 flex justify-between items-center transition-colors cursor-pointer
+                    <div class="p-4 flex justify-between items-center transition-colors cursor-pointer select-none
                                 {{ $selectedClassroomId == $class->id ? 'bg-indigo-50/40 border-l-4 border-indigo-600' : 'hover:bg-gray-50/40' }}"
                         wire:click="showStudents({{ $class->id }})">
-                        <div>
-                            <div class="font-bold text-gray-900 text-sm uppercase">{{ $class->name }}</div>
+
+                        <div class="pr-2">
+                            <div class="font-bold text-gray-900 text-sm uppercase flex items-center gap-2">
+                                {{ $class->name }}
+                                <span wire:loading wire:target="showStudents({{ $class->id }})"
+                                    class="inline-block animate-spin text-xs text-indigo-600">🌀</span>
+                            </div>
                             <div class="text-xs text-indigo-600 font-medium mt-0.5">
                                 👨‍🏫 {{ $class->waliKelas->name ?? 'Belum ada Wali Kelas' }}
                             </div>
@@ -115,15 +133,15 @@
                             </p>
                         </div>
 
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1 shrink-0">
                             <button wire:click.stop="editClassroom({{ $class->id }})"
-                                class="p-1.5 hover:bg-gray-100 text-indigo-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                class="p-2 hover:bg-gray-100 text-indigo-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                 title="Edit Wali Kelas">
                                 ✏️
                             </button>
                             <button wire:click.stop="delete({{ $class->id }})"
                                 wire:confirm="Menghapus kelas ini akan memutuskan status penempatan kelas murid di dalamnya. Yakin?"
-                                class="p-1.5 hover:bg-rose-50 text-gray-300 hover:text-rose-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                class="p-2 hover:bg-rose-50 text-gray-300 hover:text-rose-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                 title="Hapus Kelas">
                                 🗑️
                             </button>
@@ -144,19 +162,20 @@
     </div>
 
     <!-- KOLOM 3: Detail Murid (dengan Pagination) -->
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden flex flex-col justify-between">
+    <div
+        class="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden flex flex-col justify-between min-h-[350px]">
         @if ($selectedClassroom)
             <div>
-                <div class="p-4 bg-gray-900 text-white flex justify-between items-center">
-                    <div>
-                        <h2 class="text-sm font-bold uppercase tracking-wider">Kelas: {{ $selectedClassroom->name }}
-                        </h2>
-                        <p class="text-[11px] text-gray-300 mt-0.5">
+                <div class="p-4 bg-gray-900 text-white flex justify-between items-center gap-2">
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-bold uppercase tracking-wider truncate">Kelas:
+                            {{ $selectedClassroom->name }}</h2>
+                        <p class="text-[11px] text-gray-300 mt-0.5 truncate">
                             Wali Kelas: <strong
                                 class="text-indigo-300">{{ $selectedClassroom->waliKelas->name ?? 'Belum Ditugaskan' }}</strong>
                         </p>
                     </div>
-                    <span class="px-2.5 py-1 bg-white/10 rounded-full text-xs font-bold font-mono">
+                    <span class="px-2.5 py-1 bg-white/10 rounded-full text-xs font-bold font-mono shrink-0">
                         {{ $students->total() }} Murid
                     </span>
                 </div>
@@ -171,20 +190,22 @@
                         </div>
                     @else
                         @foreach ($students as $index => $student)
-                            <div class="p-3.5 flex justify-between items-center hover:bg-gray-50/30 transition-colors">
-                                <div class="flex items-center gap-3">
+                            <div
+                                class="p-3.5 flex justify-between items-center hover:bg-gray-50/30 transition-colors gap-2">
+                                <div class="flex items-center gap-3 min-w-0">
                                     <span
-                                        class="w-5 h-5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-500 flex items-center justify-center font-mono">
+                                        class="w-5 h-5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-500 flex items-center justify-center font-mono shrink-0">
                                         {{ ($students->currentPage() - 1) * $students->perPage() + $index + 1 }}
                                     </span>
-                                    <div>
-                                        <div class="text-xs font-bold text-gray-900">{{ $student->name }}</div>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-bold text-gray-900 truncate">{{ $student->name }}
+                                        </div>
                                         <div class="text-[10px] text-gray-400 font-mono mt-0.5">NISN:
                                             {{ $student->nisn }}</div>
                                     </div>
                                 </div>
                                 <span
-                                    class="text-[10px] font-bold px-2 py-0.5 rounded-sm {{ $student->gender == 'L' ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-rose-700' }}">
+                                    class="text-[10px] font-bold px-2 py-0.5 rounded-xs shrink-0 {{ $student->gender == 'L' ? 'bg-blue-50 text-blue-700' : 'bg-rose-50 text-rose-700' }}">
                                     {{ $student->gender == 'L' ? 'Laki-laki' : 'Perempuan' }}
                                 </span>
                             </div>

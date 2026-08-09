@@ -1,4 +1,4 @@
-<div class="p-6 max-w-7xl mx-auto space-y-6" x-data="{
+<div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6" x-data="{
     openDrawer: false,
     drawerData: { name: '', summary: {}, monthly_breakdown: {} },
     selectedMonthKey: '',
@@ -7,6 +7,7 @@
     openPicker: false
 }">
 
+    <!-- STYLING KHUSUS CETAK PDF / WINDOW PRINT (LANDSCAPE A4/F4 FORMAL) -->
     <style>
         @media print {
             @page {
@@ -69,10 +70,10 @@
         }
     </style>
 
-    <!-- MODAL DETAIL AUDIT TRAIL MAPEL -->
-    <div x-show="openModal"
+    <!-- MODAL DETAIL AUDIT TRAIL MAPEL (NO PRINT) -->
+    <div x-show="openModal" x-cloak
         class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs flex items-center justify-center z-60 p-4 no-print"
-        style="display: none;" @keydown.escape.window="openModal = false">
+        @keydown.escape.window="openModal = false">
 
         <div class="bg-white rounded-2xl border border-gray-100 shadow-2xl w-full max-w-2xl overflow-hidden"
             @click.away="openModal = false">
@@ -144,7 +145,7 @@
 
     @if (!$myClassroom)
         <!-- JIKA GURU LOGGED IN BUKAN WALI KELAS -->
-        <div class="bg-white p-8 rounded-2xl border border-gray-100 shadow-xs text-center space-y-3">
+        <div class="bg-white p-8 sm:p-12 rounded-2xl border border-gray-100 shadow-xs text-center space-y-3">
             <div class="text-4xl">👨‍🏫</div>
             <h2 class="text-base font-bold text-gray-900">Anda Belum Ditugaskan Sebagai Wali Kelas</h2>
             <p class="text-xs text-gray-500 max-w-md mx-auto">
@@ -193,7 +194,7 @@
             class="no-print bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <div class="flex items-center gap-2">
-                    <h1 class="text-xl font-bold text-gray-900">Rekapitulasi Kelas Saya</h1>
+                    <h1 class="text-lg sm:text-xl font-bold text-gray-900">Rekapitulasi Kelas Saya</h1>
                     <span
                         class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-extrabold uppercase border border-emerald-100">
                         🏫 Kelas {{ $myClassroom->name }}
@@ -212,9 +213,8 @@
                         <span class="text-[10px] text-gray-400">▼</span>
                     </button>
 
-                    <div x-show="openPicker" @click.away="openPicker = false" x-transition
-                        class="absolute right-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-2xl p-4 z-50 space-y-3"
-                        style="display: none;">
+                    <div x-show="openPicker" x-cloak @click.away="openPicker = false" x-transition
+                        class="absolute right-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-2xl p-4 z-50 space-y-3">
                         <div
                             class="text-xs font-bold text-gray-900 border-b border-gray-100 pb-2 flex justify-between items-center">
                             <span>Pilih Rentang Bulan</span>
@@ -247,9 +247,10 @@
                     </div>
                 </div>
 
-                <button wire:click="exportExcel"
-                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
-                    📊 Excel
+                <button wire:click="exportExcel" wire:loading.attr="disabled"
+                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+                    <span wire:loading.remove wire:target="exportExcel">📊 Excel</span>
+                    <span wire:loading wire:target="exportExcel">Proses...</span>
                 </button>
 
                 <button onclick="window.print()"
@@ -259,14 +260,15 @@
             </div>
         </div>
 
-        <!-- TABEL REKAPITULASI -->
-        <div class="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-            <table class="w-full text-left border-collapse">
+        <!-- TABEL REKAPITULASI SENSITIF STICKY -->
+        <div class="relative w-full bg-white rounded-2xl border border-gray-100 shadow-xs overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-max">
                 <thead>
                     <tr
                         class="bg-gray-50/80 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        <th class="p-4 w-12 text-center">No</th>
-                        <th class="p-4">Nama Siswa</th>
+                        <th class="p-4 w-12 text-center sticky left-0 bg-gray-50 z-20">No</th>
+                        <th class="p-4 sticky left-12 bg-gray-50 z-20 shadow-[1px_0_0_0_rgba(243,244,246,1)]">Nama
+                            Siswa</th>
                         <th class="p-4 w-28 font-mono text-xs">NISN</th>
                         <th class="p-4 text-center text-emerald-600">Hadir</th>
                         <th class="p-4 text-center text-indigo-600">Telat</th>
@@ -279,17 +281,25 @@
                 </thead>
                 <tbody class="divide-y divide-gray-50 text-xs text-gray-700">
                     @forelse ($reportData as $index => $studentData)
-                        <tr class="hover:bg-indigo-50/30 transition-colors cursor-pointer"
+                        <tr class="group hover:bg-indigo-50/30 transition-colors cursor-pointer"
                             @click="drawerData = {{ json_encode($studentData) }}; selectedMonthKey = Object.keys(drawerData.monthly_breakdown)[0]; openDrawer = true">
-                            <td class="p-4 text-center font-mono font-bold text-gray-400">{{ $index + 1 }}</td>
-                            <td class="p-4 font-bold text-gray-900 text-sm">
+
+                            <td
+                                class="p-4 text-center font-mono font-bold text-gray-400 sticky left-0 bg-white group-hover:bg-indigo-50/30 transition-colors z-10">
+                                {{ $index + 1 }}
+                            </td>
+
+                            <td
+                                class="p-4 font-bold text-gray-900 text-sm sticky left-12 bg-white group-hover:bg-indigo-50/30 transition-colors z-10 shadow-[1px_0_0_0_rgba(243,244,246,1)]">
                                 {{ $studentData['name'] }}
                                 @if ($studentData['percentage'] < 75)
                                     <span
-                                        class="ml-1.5 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md font-bold no-print">⚠️
-                                        Kehadiran Rendah</span>
+                                        class="ml-1.5 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md font-bold no-print">
+                                        ⚠️ Kehadiran Rendah
+                                    </span>
                                 @endif
                             </td>
+
                             <td class="p-4 font-mono text-gray-400">{{ $studentData['nisn'] }}</td>
                             <td class="p-4 text-center font-bold text-emerald-600">
                                 {{ $studentData['summary']['Hadir'] }}</td>
@@ -316,8 +326,9 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" class="p-8 text-center text-gray-400">Belum ada data presensi harian
-                                untuk siswa di kelas ini.</td>
+                            <td colspan="10" class="p-8 text-center text-gray-400">
+                                Belum ada data presensi harian untuk siswa di kelas ini.
+                            </td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -342,7 +353,7 @@
         </div>
 
         <!-- SIDE DRAWER PANEL -->
-        <div x-show="openDrawer" class="fixed inset-0 z-50 overflow-hidden no-print" style="display: none;">
+        <div x-show="openDrawer" x-cloak class="fixed inset-0 z-50 overflow-hidden no-print">
             <div class="absolute inset-0 bg-gray-900/40 backdrop-blur-xs transition-opacity"
                 @click="openDrawer = false"></div>
 
@@ -412,7 +423,7 @@
                                 </div>
 
                                 <div
-                                    class="grid grid-cols-7 gap-2 mb-2 text-center text-[10px] font-bold text-gray-500 uppercase">
+                                    class="grid grid-cols-7 gap-1.5 mb-2 text-center text-[10px] font-bold text-gray-500 uppercase">
                                     <div>Sen</div>
                                     <div>Sel</div>
                                     <div>Rab</div>
@@ -422,14 +433,14 @@
                                     <div class="text-rose-600">Min</div>
                                 </div>
 
-                                <div class="grid grid-cols-7 gap-2">
+                                <div class="grid grid-cols-7 gap-1.5">
                                     <template
                                         x-for="(cell, index) in drawerData.monthly_breakdown[selectedMonthKey].calendar_grid"
                                         :key="index">
                                         <div>
                                             <template x-if="cell.is_empty">
                                                 <div
-                                                    class="w-full p-2 rounded-xl border border-transparent min-h-[52px]">
+                                                    class="w-full p-1.5 rounded-xl border border-transparent min-h-[44px] sm:min-h-[52px]">
                                                 </div>
                                             </template>
 
@@ -437,7 +448,7 @@
                                                 <div>
                                                     <template x-if="cell.details && cell.details.length > 0">
                                                         <button @click="openModal = true; modalData = cell"
-                                                            class="w-full p-2 rounded-xl text-center border text-xs font-bold flex flex-col items-center justify-center min-h-[52px] transition-all hover:scale-105 shadow-2xs cursor-pointer"
+                                                            class="w-full p-1.5 rounded-xl text-center border text-xs font-bold flex flex-col items-center justify-center min-h-[44px] sm:min-h-[52px] transition-all hover:scale-105 shadow-2xs cursor-pointer"
                                                             :class="{
                                                                 'bg-emerald-500 text-white border-emerald-600': cell
                                                                     .letter === 'H',
@@ -452,13 +463,14 @@
                                                             }">
                                                             <span class="text-[9px] opacity-80"
                                                                 x-text="cell.day_num"></span>
-                                                            <span class="text-sm font-black font-mono mt-0.5"
+                                                            <span
+                                                                class="text-xs sm:text-sm font-black font-mono mt-0.5"
                                                                 x-text="cell.letter"></span>
                                                         </button>
                                                     </template>
 
                                                     <template x-if="!cell.details || cell.details.length === 0">
-                                                        <div class="w-full p-2 rounded-xl text-center border text-xs font-bold flex flex-col items-center justify-center min-h-[52px]"
+                                                        <div class="w-full p-1.5 rounded-xl text-center border text-xs font-bold flex flex-col items-center justify-center min-h-[44px] sm:min-h-[52px]"
                                                             :class="{
                                                                 'bg-gray-100 text-gray-400 border-gray-200': cell
                                                                     .letter === 'L' || cell

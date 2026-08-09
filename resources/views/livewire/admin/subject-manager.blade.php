@@ -1,4 +1,6 @@
-<div class="p-6 max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="p-4 sm:p-6 max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+
+    <!-- FORM TAMBAH MATA PELAJARAN -->
     <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs h-fit">
         <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Tambah Mata Pelajaran</h2>
 
@@ -28,42 +30,63 @@
                 @enderror
             </div>
 
-            <button type="submit"
-                class="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all">
-                Simpan Mapel
+            <button type="submit" wire:loading.attr="disabled"
+                class="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all flex items-center justify-center gap-2">
+                <span wire:loading.remove wire:target="store">Simpan Mapel</span>
+                <span wire:loading wire:target="store" class="flex items-center gap-2">
+                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                            stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                    Memproses...
+                </span>
             </button>
         </form>
     </div>
 
+    <!-- TABEL MASTER MATA PELAJARAN -->
     <div class="md:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
         <div class="p-4 bg-gray-50/50 border-b border-gray-100">
             <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider">Master Mata Pelajaran</h2>
         </div>
-        <table class="w-full text-left border-collapse">
-            <thead>
-                <tr
-                    class="bg-gray-50/30 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    <th class="p-4 w-32">Kode</th>
-                    <th class="p-4">Nama Mata Pelajaran</th>
-                    <th class="p-4 w-20 text-center">Aksi</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
-                @foreach ($subjects as $sub)
-                    <tr class="hover:bg-gray-50/30 transition-colors">
-                        <td class="p-4 font-mono font-bold text-xs text-indigo-600 bg-indigo-50/10">{{ $sub->code }}
-                        </td>
-                        <td class="p-4 font-semibold text-gray-900">{{ $sub->name }}</td>
-                        <td class="p-4 text-center">
-                            <button wire:click="delete({{ $sub->id }})"
-                                wire:confirm="Yakin ingin menghapus mapel ini?"
-                                class="text-xs text-rose-600 hover:text-rose-900 font-bold cursor-pointer">
-                                Hapus
-                            </button>
-                        </td>
+
+        <!-- Wrapper Responsif Tabel -->
+        <div class="overflow-x-auto w-full">
+            <table class="w-full text-left border-collapse min-w-[480px]">
+                <thead>
+                    <tr
+                        class="bg-gray-50/30 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <th class="p-4 w-32">Kode</th>
+                        <th class="p-4">Nama Mata Pelajaran</th>
+                        <th class="p-4 w-20 text-center">Aksi</th>
                     </tr>
-                @endforeach
-            </tbody>
-        </table>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
+                    @forelse ($subjects as $sub)
+                        <tr class="hover:bg-gray-50/30 transition-colors">
+                            <td class="p-4 font-mono font-bold text-xs text-indigo-600 bg-indigo-50/10">
+                                {{ $sub->code }}</td>
+                            <td class="p-4 font-semibold text-gray-900">{{ $sub->name }}</td>
+                            <td class="p-4 text-center">
+                                <button wire:click="delete({{ $sub->id }})" wire:loading.attr="disabled"
+                                    wire:confirm="Yakin ingin menghapus mapel ini?"
+                                    class="text-xs text-rose-600 hover:text-rose-900 disabled:opacity-50 font-bold cursor-pointer transition-colors">
+                                    Hapus
+                                </button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="3" class="p-8 text-center text-gray-400 text-xs">
+                                Belum ada data mata pelajaran.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>

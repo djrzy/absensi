@@ -38,6 +38,6 @@ class Login extends Component
     public function render()
     {
         // Kita set layout kosong (blank) khusus login agar tidak memunculkan navbar utama aplikasi
-        return view('livewire.auth.login')->layout('layouts.app', ['title' => 'Login - EduAttend']);
+        return view('livewire.auth.login')->layout('layouts.app');
     }
 }
