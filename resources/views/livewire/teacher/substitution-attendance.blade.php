@@ -67,7 +67,8 @@
                             class="flex items-center gap-1">
                             <span>📝</span> Absen sebagai Pengganti
                         </span>
-                        <span wire:loading wire:target="takeOver({{ $schedule->id }})" class="flex items-center gap-2">
+                        <span wire:loading.flex wire:target="takeOver({{ $schedule->id }})"
+                            class="flex items-center gap-2">
                             <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                                     stroke-width="4"></circle>

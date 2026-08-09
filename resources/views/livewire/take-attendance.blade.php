@@ -16,7 +16,7 @@
                 wire:confirm="⚠️ KONFIRMASI KUNCI PERMANEN:\n\nSetelah dikunci, data absensi dan bukti foto hari ini TIDAK BISA DIBUAT/DIUBAH LAGI oleh Guru.\n\nApakah Anda yakin seluruh data sudah benar?"
                 class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs flex items-center gap-1.5">
                 <span wire:loading.remove wire:target="lockAttendance">🔒 Kunci Absensi Hari Ini</span>
-                <span wire:loading wire:target="lockAttendance" class="flex items-center gap-1">
+                <span wire:loading.flex wire:target="lockAttendance" class="flex items-center gap-1">
                     <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                             stroke-width="4"></circle>
@@ -194,7 +194,7 @@
                         <span class="text-xs text-rose-600 block font-semibold">{{ $message }}</span>
                     @enderror
 
-                    <div wire:loading wire:target="photoProof"
+                    <div wire:loading.flex wire:target="photoProof"
                         class="text-xs text-indigo-600 font-bold flex items-center gap-2">
                         <span class="animate-spin">⏳</span> Memproses foto dari kamera...
                     </div>
@@ -225,7 +225,7 @@
                     <button wire:click="save" @click="isDirty = false" wire:loading.attr="disabled"
                         class="w-full sm:w-auto px-8 py-3 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer">
                         <span wire:loading.remove wire:target="save">💾 Simpan Absensi & Foto Bukti</span>
-                        <span wire:loading wire:target="save" class="flex items-center gap-2">
+                        <span wire:loading.flex wire:target="save" class="flex items-center gap-2">
                             <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10"
                                     stroke="currentColor" stroke-width="4"></circle>

@@ -47,7 +47,7 @@
                 <button type="submit" wire:loading.attr="disabled"
                     class="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all flex items-center justify-center gap-2">
                     <span wire:loading.remove wire:target="store">Simpan Kelas</span>
-                    <span wire:loading wire:target="store" class="flex items-center gap-1.5">
+                    <span wire:loading.flex wire:target="store" class="flex items-center gap-1.5">
                         <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                                 stroke-width="4"></circle>

@@ -60,7 +60,7 @@
                 wire:confirm="Yakin ingin memasukkan {{ count($selectedStudentIds) }} siswa yang dicentang ke kelas tujuan?"
                 class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all flex items-center justify-center gap-2">
                 <span wire:loading.remove wire:target="assignStudents">🚀 Masukkan Ke Kelas</span>
-                <span wire:loading wire:target="assignStudents" class="flex items-center gap-2">
+                <span wire:loading.flex wire:target="assignStudents" class="flex items-center gap-2">
                     <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
                             stroke-width="4"></circle>
