@@ -234,7 +234,7 @@
                     </button>
 
                     <div x-show="openPicker" x-cloak @click.away="openPicker = false" x-transition
-                        class="absolute right-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-2xl p-4 z-50 space-y-3">
+                        class="absolute lg:right-0 mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-2xl p-4 z-50 space-y-3">
                         <div
                             class="text-xs font-bold text-gray-900 border-b border-gray-100 pb-2 flex justify-between items-center">
                             <span>Pilih Rentang Bulan</span>

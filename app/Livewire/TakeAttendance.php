@@ -18,13 +18,14 @@ class TakeAttendance extends Component
 
     public $scheduleId;
     public $schedule;
+    public $students = []; // Disimpan ke properti agar instan di Blade
     public $date;
     public $notes;
     public $isLocked = false;
     public $isLateForAttendance = false;
 
-    public $photoProof;    // Tempat file foto baru dari kamera
-    public $existingPhoto; // Tempat foto yang sudah tersimpan sebelumnya
+    public $photoProof;    // File foto baru dari kamera (terkompresi dari client)
+    public $existingPhoto; // Foto tersimpan sebelumnya
 
     public $attendanceData = [];
     public $studentNotes = [];
@@ -36,13 +37,13 @@ class TakeAttendance extends Component
     {
         $this->scheduleId = $scheduleId;
         $this->schedule = Schedule::with(['classroom.students', 'subject'])->findOrFail($scheduleId);
+        $this->students = $this->schedule->classroom->students;
         $this->date = Carbon::today()->toDateString();
 
         $currentTeacherId = auth()->id();
         $currentUserRole = auth()->user()->role ?? '';
 
         $isOwner = $this->schedule->teacher_id === $currentTeacherId;
-        // Izinkan Owner, Admin, atau siapapun dengan Role Guru/Piket untuk mengajar/menggantikan
         $canTakeAttendance = $isOwner || in_array($currentUserRole, ['Admin', 'Guru', 'Piket', 'GuruPiket']);
 
         if (!$canTakeAttendance) {
@@ -64,7 +65,7 @@ class TakeAttendance extends Component
             $this->isLateForAttendance = true;
         }
 
-        // Load data absensi jika sudah pernah diisi sebelumnya
+        // Load data absensi jika sudah pernah diisi
         $existingAttendance = Attendance::where('schedule_id', $this->scheduleId)
             ->where('date', $this->date)
             ->with('details')
@@ -74,7 +75,6 @@ class TakeAttendance extends Component
             $this->notes = $existingAttendance->notes;
             $this->existingPhoto = $existingAttendance->photo_proof ?? null;
 
-            // Kunci jika status sudah is_locked = true
             if ($existingAttendance->is_locked) {
                 $this->isLocked = true;
             }
@@ -84,8 +84,8 @@ class TakeAttendance extends Component
                 $this->studentNotes[$detail->student_id] = $detail->notes;
             }
         } else {
-            // Pengisian baru: Cek status warisan dari jam sebelumnya di hari yang sama
-            foreach ($this->schedule->classroom->students as $student) {
+            // Pengisian baru: Cek status warisan dari jam sebelumnya
+            foreach ($this->students as $student) {
                 $priorAttendanceDetail = AttendanceDetail::whereHas('attendance', function ($query) {
                     $query->where('date', $this->date);
                 })
@@ -129,30 +129,29 @@ class TakeAttendance extends Component
         }
 
         // Validasi ketersediaan status presensi seluruh siswa
-        foreach ($this->schedule->classroom->students as $student) {
+        foreach ($this->students as $student) {
             if (!isset($this->attendanceData[$student->id]) || is_null($this->attendanceData[$student->id])) {
                 session()->flash('error', 'Mohon isi semua absensi siswa sebelum menyimpan!');
                 return;
             }
         }
 
-        // Validasi Foto: Wajib jika BELUM pernah ada foto tersimpan sebelumnya
-        $photoRules = $this->existingPhoto ? 'nullable|image|max:5120' : 'required|image|max:5120';
+        // Validasi Foto (Batas ukuran disesuaikan menjadi 5MB)
+        $photoRules = $this->existingPhoto ? 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120' : 'required|image|mimes:jpg,jpeg,png,webp|max:5120';
 
         $this->validate([
             'photoProof' => $photoRules,
         ], [
             'photoProof.required' => 'Mohon ambil atau unggah foto bukti mengajar di kelas terlebih dahulu sebelum menyimpan.',
             'photoProof.image'    => 'File bukti harus berupa foto/gambar.',
+            'photoProof.mimes'    => 'Format foto harus berupa JPG, JPEG, PNG, atau WEBP.',
             'photoProof.max'      => 'Ukuran foto maksimal adalah 5MB.',
         ]);
 
         DB::transaction(function () {
             $photoPath = $this->existingPhoto;
 
-            // Simpan foto baru jika ada upload baru dari kamera
             if ($this->photoProof) {
-                // Hapus foto lama jika ada
                 if ($this->existingPhoto && Storage::disk('public')->exists($this->existingPhoto)) {
                     Storage::disk('public')->delete($this->existingPhoto);
                 }
@@ -160,7 +159,6 @@ class TakeAttendance extends Component
                 $photoPath = $this->photoProof->store('attendance_proofs', 'public');
             }
 
-            // Simpan / Update Header Absensi (mencatat auth()->id() sebagai pengisi)
             $attendance = Attendance::updateOrCreate(
                 ['schedule_id' => $this->scheduleId, 'date' => $this->date],
                 [
@@ -170,7 +168,6 @@ class TakeAttendance extends Component
                 ]
             );
 
-            // Simpan / Update Detail Absensi Per Siswa
             foreach ($this->attendanceData as $studentId => $status) {
                 AttendanceDetail::updateOrCreate(
                     ['attendance_id' => $attendance->id, 'student_id' => $studentId],
@@ -186,7 +183,7 @@ class TakeAttendance extends Component
     {
         if ($this->isLocked) return;
 
-        foreach ($this->schedule->classroom->students as $student) {
+        foreach ($this->students as $student) {
             $this->attendanceData[$student->id] = 'Hadir';
         }
 
@@ -197,7 +194,7 @@ class TakeAttendance extends Component
     {
         if ($this->isLocked) return;
 
-        foreach ($this->schedule->classroom->students as $student) {
+        foreach ($this->students as $student) {
             $this->attendanceData[$student->id] = null;
         }
     }
@@ -205,7 +202,7 @@ class TakeAttendance extends Component
     public function render()
     {
         return view('livewire.take-attendance', [
-            'students' => $this->schedule->classroom->students
+            'students' => $this->students
         ]);
     }
 }
