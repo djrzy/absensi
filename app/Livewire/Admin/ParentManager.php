@@ -14,7 +14,7 @@ class ParentManager extends Component
 {
     use WithPagination;
 
-    // Properti Form Input Akun Wali Utama
+    // Properti Form Input Akun Wali Utama (Left Container)
     public $name;
     public $email;
     public $password;
@@ -22,12 +22,13 @@ class ParentManager extends Component
 
     // Properti State Pencarian & Filter Kelas
     public $search = '';
-    public $filterClassroom = ''; // Filter berdasarkan kelas anak
+    public $filterClassroom = '';
 
     // Properti State Modal "+ Tautkan Anak"
     public $showLinkModal = false;
     public $targetParent = null;
     public $additional_student_id = null;
+    public $modalSearch = ''; // Search state khusus di dalam modal
 
     public function updatingSearch()
     {
@@ -46,6 +47,11 @@ class ParentManager extends Component
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:6',
             'student_id' => 'nullable|exists:students,id',
+        ], [
+            'name.required' => 'Nama lengkap wali murid wajib diisi.',
+            'email.required' => 'Alamat email wajib diisi.',
+            'email.unique' => 'Email ini sudah terdaftar di sistem.',
+            'password.required' => 'Kata sandi minimal 6 karakter.',
         ]);
 
         DB::transaction(function () {
@@ -76,6 +82,7 @@ class ParentManager extends Component
     {
         $this->targetParent = User::findOrFail($parentId);
         $this->additional_student_id = null;
+        $this->modalSearch = '';
         $this->showLinkModal = true;
     }
 
@@ -84,6 +91,14 @@ class ParentManager extends Component
         $this->showLinkModal = false;
         $this->targetParent = null;
         $this->additional_student_id = null;
+        $this->modalSearch = '';
+    }
+
+    // Direct click tautkan anak dari daftar pencarian modal
+    public function linkStudentById($studentId)
+    {
+        $this->additional_student_id = $studentId;
+        $this->linkStudent();
     }
 
     public function linkStudent()
@@ -137,10 +152,8 @@ class ParentManager extends Component
 
     public function render()
     {
-        // Query Wali Murid dengan relasi anak (students) dan kelasnya (classroom)
         $parentsQuery = User::where('role', 'WaliMurid')
             ->with(['students.classroom'])
-            // Filter Pencarian: Nama Wali, Email Wali, ATAU Nama Anak (Multi-anak)
             ->when($this->search, function ($query) {
                 $query->where(function ($q) {
                     $q->where('name', 'like', '%' . $this->search . '%')
@@ -151,7 +164,6 @@ class ParentManager extends Component
                         });
                 });
             })
-            // Filter Berdasarkan Kelas Anak
             ->when($this->filterClassroom, function ($query) {
                 $query->whereHas('students', function ($studentQuery) {
                     $studentQuery->where('classroom_id', $this->filterClassroom);
@@ -159,9 +171,21 @@ class ParentManager extends Component
             })
             ->orderBy('id', 'desc');
 
+        // Formatted Array ringan untuk Autocomplete Combobox Alpine.js
+        $studentsList = Student::with('classroom:id,name')
+            ->select('id', 'name', 'nisn', 'classroom_id')
+            ->orderBy('name', 'asc')
+            ->get()
+            ->map(fn($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'nisn' => $s->nisn ?? '-',
+                'classroom_name' => $s->classroom->name ?? '-'
+            ]);
+
         return view('livewire.admin.parent-manager', [
             'parents' => $parentsQuery->paginate(10),
-            'allStudents' => Student::with('classroom')->orderBy('name', 'asc')->get(),
+            'studentsList' => $studentsList,
             'classrooms' => Classroom::orderBy('name', 'asc')->get()
         ]);
     }
