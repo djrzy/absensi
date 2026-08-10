@@ -35,7 +35,7 @@ class Login extends Component
             } elseif ($user->role === 'Guru') {
                 return redirect()->intended('/dashboard');
             } elseif ($user->role === 'Kepala') {
-                return redirect()->intended('/'); // 👈 KEPALA SEKOLAH
+                return redirect()->intended('/kepala-sekolah/dashboard'); // 👈 KEPALA SEKOLAH
             } elseif ($user->role === 'WaliMurid') {
                 return redirect()->intended('/'); // Wali Murid
             }

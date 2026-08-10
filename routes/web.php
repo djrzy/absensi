@@ -60,7 +60,7 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:Kepala')->group(function () {
-        Route::get('/', HeadmasterDashboard::class)->name('headmaster.dashboard');
+        Route::get('/kepala-sekolah/dashboard', HeadmasterDashboard::class)->name('headmaster.dashboard');
     });
 
     // Fitur Logout Singkat
