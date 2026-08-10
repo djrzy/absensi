@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Admin\AcademicYearManager;
+use App\Livewire\Admin\AdminDashboard;
 use App\Livewire\Admin\AttendanceReport;
 use App\Livewire\Admin\BulkStudentAssignment;
 use App\Livewire\Admin\CalendarManager;
@@ -40,12 +41,13 @@ Route::middleware('auth')->group(function () {
 
     // 2. KELOMPOK ADMIN (Hanya Admin yang boleh masuk)
     Route::middleware('role:Admin')->group(function () {
+        Route::get('/admin/dashboard', AdminDashboard::class)->name('admin.dashboard');
         Route::get('/admin/tahun-ajaran', AcademicYearManager::class);
         Route::get('/admin/kelas', ClassroomManager::class);
         Route::get('/admin/jadwal', ScheduleManager::class);
         Route::get('/admin/mapel', SubjectManager::class);
         Route::get('/admin/rekap', AttendanceReport::class);
-        Route::get('/admin/kalender', CalendarManager::class);
+        // Route::get('/admin/kalender', CalendarManager::class);
         Route::get('/admin/pindah-kelas', ClassPromotionManager::class);
         Route::get('/admin/penetapan-kelas', BulkStudentAssignment::class);
 

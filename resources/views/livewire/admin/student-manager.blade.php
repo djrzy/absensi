@@ -1,6 +1,6 @@
 <div class="p-4 sm:p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- KOLOM KIRI: Form Input & Form Upload Excel -->
+    <!-- KOLOM KIRI: Form Input & Upload Excel -->
     <div class="space-y-6">
 
         <!-- FORM INPUT MANUAL -->
@@ -169,13 +169,13 @@
     <!-- KOLOM KANAN: Tabel Data Siswa -->
     <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden h-fit">
 
-        <div class="p-4 bg-gray-50/60 border-b border-gray-100 flex justify-between items-center gap-3">
+        <div class="p-4 bg-gray-50/60 border-b border-gray-100 flex flex-wrap justify-between items-center gap-3">
             <a href="/admin/penetapan-kelas"
                 class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0">
                 <span>📌 Penetapan Massal →</span>
             </a>
 
-            <!-- BARU: BILAH AKSI HAPUS MASSAL -->
+            <!-- BILAH AKSI HAPUS MASSAL -->
             @if (count($selectedStudents) > 0)
                 <button wire:click="deleteSelected"
                     wire:confirm="Yakin ingin menghapus {{ count($selectedStudents) }} murid yang dipilih secara permanen?"
@@ -185,10 +185,10 @@
             @endif
         </div>
 
-        <!-- Filter Bar -->
-        <div class="p-4 bg-gray-50/60 border-b border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div class="relative">
-                <input type="text" wire:model.live.debounce.300ms="search" placeholder="🔍 Cari nama atau NISN..."
+        <!-- Filter Bar + Dynamic Per Page Dropdown -->
+        <div class="p-4 bg-gray-50/60 border-b border-gray-100 grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
+            <div class="relative sm:col-span-1">
+                <input type="text" wire:model.live.debounce.300ms="search" placeholder="🔍 Cari nama / NISN..."
                     class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all">
                 <span wire:loading wire:target="search"
                     class="absolute right-3 top-2.5 text-xs text-gray-400 animate-spin">🌀</span>
@@ -213,7 +213,41 @@
                     <option value="P">Perempuan</option>
                 </select>
             </div>
+
+            <!-- DROPDOWN PAGINATE LIMIT -->
+            <div>
+                <select wire:model.live="perPage"
+                    class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-100 transition-all">
+                    <option value="10">📄 10 per Hal</option>
+                    <option value="25">📄 25 per Hal</option>
+                    <option value="50">📄 50 per Hal</option>
+                    <option value="100">📄 100 per Hal</option>
+                </select>
+            </div>
         </div>
+
+        <!-- NOTIFIKASI BANNER: SELECT ALL MATCHED DATA -->
+        @if ($selectAll)
+            <div
+                class="p-3 bg-indigo-50 border-b border-indigo-100 text-xs text-indigo-900 flex justify-between items-center px-4">
+                @if ($selectAllMatches)
+                    <span>
+                        🎉 Seluruh <strong>{{ count($selectedStudents) }}</strong> data murid terfilter di semua
+                        halaman telah terpilih.
+                    </span>
+                @else
+                    <span>
+                        📌 <strong>{{ count($selectedStudents) }}</strong> murid di halaman ini terpilih.
+                    </span>
+                    @if ($totalStudents > count($selectedStudents))
+                        <button type="button" wire:click="selectAllFilteredData"
+                            class="text-indigo-700 font-bold hover:underline cursor-pointer ml-2">
+                            Pilih seluruh {{ $totalStudents }} murid yang terfilter →
+                        </button>
+                    @endif
+                @endif
+            </div>
+        @endif
 
         <!-- Tabel Responsif -->
         <div class="overflow-x-auto w-full">
@@ -221,7 +255,6 @@
                 <thead>
                     <tr
                         class="bg-gray-50/30 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        <!-- BARU: MASTER CHECKBOX -->
                         <th class="p-4 w-10 text-center">
                             <input type="checkbox" wire:model.live="selectAll"
                                 class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
@@ -235,7 +268,6 @@
                     @forelse($students as $st)
                         <tr
                             class="hover:bg-gray-50/30 transition-colors {{ in_array((string) $st->id, $selectedStudents) ? 'bg-indigo-50/20' : '' }}">
-                            <!-- BARU: ROW CHECKBOX -->
                             <td class="p-4 text-center">
                                 <input type="checkbox" wire:model.live="selectedStudents"
                                     value="{{ $st->id }}"

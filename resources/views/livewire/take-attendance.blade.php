@@ -214,7 +214,7 @@
                 isUploading: false,
                 uploadProgress: 0,
                 stream: null,
-
+            
                 // 1. Buka Kamera / Webcam
                 async startWebcam() {
                     try {
@@ -228,7 +228,7 @@
                         this.showWebcam = false;
                     }
                 },
-
+            
                 // 2. Tangkap Gambar dari Webcam
                 captureWebcam() {
                     const video = this.$refs.video;
@@ -237,16 +237,16 @@
                     canvas.height = video.videoHeight || 720;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
+            
                     this.stopWebcam();
-
+            
                     canvas.toBlob((blob) => {
                         if (!blob) return;
                         const file = new File([blob], 'webcam-proof.jpg', { type: 'image/jpeg', lastModified: Date.now() });
                         this.uploadFileToLivewire(file);
                     }, 'image/jpeg', 0.75);
                 },
-
+            
                 // 3. Hentikan Stream Webcam
                 stopWebcam() {
                     if (this.stream) {
@@ -255,12 +255,12 @@
                     }
                     this.showWebcam = false;
                 },
-
+            
                 // 4. Handle Upload & Compress File Gambar
                 handleFileSelect(event) {
                     const file = event.target.files[0];
                     if (!file) return;
-
+            
                     const reader = new FileReader();
                     reader.readAsDataURL(file);
                     reader.onload = (e) => {
@@ -272,20 +272,24 @@
                             const MAX_HEIGHT = 1280;
                             let width = img.width;
                             let height = img.height;
-
+            
                             if (width > height) {
-                                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width;
-                                    width = MAX_WIDTH; }
+                                if (width > MAX_WIDTH) {
+                                    height *= MAX_WIDTH / width;
+                                    width = MAX_WIDTH;
+                                }
                             } else {
-                                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height;
-                                    height = MAX_HEIGHT; }
+                                if (height > MAX_HEIGHT) {
+                                    width *= MAX_HEIGHT / height;
+                                    height = MAX_HEIGHT;
+                                }
                             }
-
+            
                             canvas.width = width;
                             canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-
+            
                             canvas.toBlob((blob) => {
                                 if (!blob) return;
                                 const compressedFile = new File([blob], file.name || 'bukti-mengajar.jpg', { type: 'image/jpeg', lastModified: Date.now() });
@@ -294,12 +298,12 @@
                         };
                     };
                 },
-
+            
                 // 5. Unggah File Terkompresi ke Livewire
                 uploadFileToLivewire(file) {
                     this.isUploading = true;
                     this.uploadProgress = 10;
-
+            
                     @this.upload('photoProof', file,
                         (uploadedFilename) => {
                             this.isUploading = false;
@@ -358,20 +362,20 @@
 
                             <!-- TAMPILAN LAPTOP / DESKTOP (2 PILIHAN UTAMA) -->
                             <template x-if="!isMobile">
-                                <div class="grid grid-cols-2 gap-2.5">
+                                <div class="grid grid-cols-1 gap-2.5">
                                     <button type="button" @click="startWebcam()" {{ $isLocked ? 'disabled' : '' }}
                                         class="flex items-center justify-center gap-2 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.99] disabled:opacity-50">
                                         <span class="text-base">📹</span>
                                         <span>Gunakan Webcam</span>
                                     </button>
 
-                                    <label
+                                    {{-- <label
                                         class="flex items-center justify-center gap-2 py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200/80 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.99] {{ $isLocked ? 'opacity-50 pointer-events-none' : '' }}">
                                         <span class="text-base">📁</span>
                                         <span>Pilih File Gambar</span>
                                         <input type="file" accept="image/*" @change="handleFileSelect($event)"
                                             {{ $isLocked ? 'disabled' : '' }} class="hidden">
-                                    </label>
+                                    </label> --}}
                                 </div>
                             </template>
                         </div>
@@ -433,12 +437,12 @@
                                                 📹 Ambil Ulang Webcam
                                             </button>
                                             <span class="text-gray-300">|</span>
-                                            <label
+                                            {{-- <label
                                                 class="text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer underline">
                                                 <span>📁 Ganti File</span>
                                                 <input type="file" accept="image/*"
                                                     @change="handleFileSelect($event)" class="hidden">
-                                            </label>
+                                            </label> --}}
                                         </div>
                                     </template>
                                 @endif

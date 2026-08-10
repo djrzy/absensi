@@ -67,6 +67,10 @@
 
                         <!-- Tautan Dinamis Sesuai Role -->
                         @if (auth()->user()->role === 'Admin')
+                            <a href="/admin/dashboard"
+                                class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
+                                <span>📊</span> Dashboard
+                            </a>
                             <a href="/admin/tahun-ajaran"
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
                                 <span>📆</span> Tahun Ajaran
@@ -95,10 +99,10 @@
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
                                 <span>📅</span> Jadwal Mapel
                             </a>
-                            <a href="/admin/kalender"
+                            {{-- <a href="/admin/kalender"
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
                                 <span>🏖️</span> Kalender
-                            </a>
+                            </a> --}}
                             <a href="/admin/rekap"
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
                                 <span>📊</span> Rekap Absen
@@ -127,7 +131,7 @@
                         @elseif (auth()->user()->role === 'Kepala')
                             <a href="/kepala/dashboard"
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
-                                <span>📊</span> Dashboard Kepala Sekolah
+                                <span>📊</span> Dashboard
                             </a>
                         @else
                             <a href="/dashboard"

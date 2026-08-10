@@ -17,21 +17,23 @@ class StudentManager extends Component
 {
     use WithPagination, WithFileUploads;
 
-    // Form Input Manual (Tambah/Edit)
+    // Form Input Manual
     public $name, $nisn, $gender, $classroom_id;
     public $selectedStudentId = null;
     public $isEditMode = false;
 
-    // Filter & Search State
+    // Filter, Search, & Pagination Limit State
     public $search = '';
     public $filterClassroom = '';
     public $filterGender = '';
+    public $perPage = 10; // Dynamic Per Page (10, 25, 50, 100)
 
     // Bulk Action State (Hapus Massal)
     public $selectedStudents = [];
     public $selectAll = false;
+    public $selectAllMatches = false; // Flag jika user ingin menghapus SELURUH data terfilter
 
-    // Impor Excel & Laporan State
+    // Impor Excel State
     public $excelFile;
     public $importSummary = null;
 
@@ -40,24 +42,40 @@ class StudentManager extends Component
         $this->resetPage();
         $this->resetBulkSelection();
     }
+
     public function updatingFilterClassroom()
     {
         $this->resetPage();
         $this->resetBulkSelection();
     }
+
     public function updatingFilterGender()
     {
         $this->resetPage();
         $this->resetBulkSelection();
     }
 
+    public function updatingPerPage()
+    {
+        $this->resetPage();
+        $this->resetBulkSelection();
+    }
+
+    // Toggle Master Checkbox (Halaman Aktif)
     public function updatedSelectAll($value)
     {
         if ($value) {
             $this->selectedStudents = $this->getCurrentPageStudentIds();
         } else {
-            $this->selectedStudents = [];
+            $this->resetBulkSelection();
         }
+    }
+
+    // Toggle Pilih Seluruh Data Terfilter di Semua Halaman
+    public function selectAllFilteredData()
+    {
+        $this->selectAllMatches = true;
+        $this->selectedStudents = $this->getStudentsQuery()->pluck('id')->map(fn($id) => (string)$id)->toArray();
     }
 
     public function updatedPage()
@@ -65,15 +83,16 @@ class StudentManager extends Component
         $this->resetBulkSelection();
     }
 
-    private function resetBulkSelection()
+    public function resetBulkSelection()
     {
         $this->selectedStudents = [];
         $this->selectAll = false;
+        $this->selectAllMatches = false;
     }
 
     private function getCurrentPageStudentIds()
     {
-        return $this->getStudentsQuery()->paginate(10)->pluck('id')->map(fn($id) => (string)$id)->toArray();
+        return $this->getStudentsQuery()->paginate($this->perPage)->pluck('id')->map(fn($id) => (string)$id)->toArray();
     }
 
     public function store()
@@ -121,55 +140,39 @@ class StudentManager extends Component
         $sheet = $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray();
 
-        // 1. PRE-FETCH CACHE IN MEMORY (Super Fast Lookup)
-        // Ambil daftar kelas yang ADA di DB: [ '26/27-VIIR' => id_kelas ]
         $classroomsMap = Classroom::pluck('id', 'name')->toArray();
-
-        // Ambil seluruh NISN siswa yang sudah terdaftar untuk deteksi duplikasi instant
         $existingNisns = Student::pluck('nisn', 'nisn')->toArray();
-
-        // Ambil seluruh Username/Email User yang sudah ada
-        $existingUsers = User::pluck('id', 'username')->toArray();
 
         $successCount = 0;
         $failedCount = 0;
         $failedDetails = [];
-
-        $studentsToInsert = [];
-        $usersToInsert = [];
-        $parentsToInsert = [];
-
         $now = now()->toDateTimeString();
-        $defaultPasswordHash = Hash::make('password'); // Pre-hash sekali saja untuk hemat CPU
+        $defaultPasswordHash = Hash::make('password');
 
         foreach ($rows as $index => $row) {
-            if ($index < 4) continue; // Skip 4 baris header template
+            if ($index < 4) continue;
 
-            // SESUAI TEMPLATE EXCEL:
-            $nisn         = trim((string)($row[28] ?? $row[2] ?? '')); // NISN (Col AC / Col C)
-            $name         = trim((string)($row[3] ?? ''));             // Nama Siswa (Col D)
-            $classNameRaw = strtoupper(trim((string)($row[4] ?? ''))); // KODE KELAS (Col E - Indeks 4)
-            $genderRaw    = strtoupper(trim((string)($row[8] ?? ''))); // Gender (Col I - Indeks 8)
+            $nisn         = trim((string)($row[28] ?? $row[2] ?? ''));
+            $name         = trim((string)($row[3] ?? ''));
+            $classNameRaw = strtoupper(trim((string)($row[4] ?? '')));
+            $genderRaw    = strtoupper(trim((string)($row[8] ?? '')));
 
             if (empty($name) && empty($nisn)) continue;
 
             $gender = in_array($genderRaw, ['P', 'PEREMPUAN']) ? 'P' : 'L';
 
-            // VALIDASI 1: NISN KOSONG
             if (empty($nisn)) {
                 $failedCount++;
                 $failedDetails[] = ['row' => $index + 1, 'name' => $name ?: 'Tanpa Nama', 'nisn' => '-', 'reason' => 'NISN Kosong'];
                 continue;
             }
 
-            // VALIDASI 2: DUPLIKASI NISN
             if (isset($existingNisns[$nisn])) {
                 $failedCount++;
                 $failedDetails[] = ['row' => $index + 1, 'name' => $name, 'nisn' => $nisn, 'reason' => 'NISN Sudah Terdaftar (Duplikat)'];
                 continue;
             }
 
-            // VALIDASI 3: CEK KELAS DI DATABASE (STRICT REQUIREMENT)
             if (empty($classNameRaw) || !isset($classroomsMap[$classNameRaw])) {
                 $failedCount++;
                 $failedDetails[] = [
@@ -178,12 +181,11 @@ class StudentManager extends Component
                     'nisn'   => $nisn,
                     'reason' => "Kelas '{$classNameRaw}' Tidak Ditemukan di Database"
                 ];
-                continue; // LEWATKAN JIKA KELAS TIDAK ADA DI DATABASE
+                continue;
             }
 
             $classroomId = $classroomsMap[$classNameRaw];
 
-            // Format bio_details
             $bioDetails = [
                 'nomor_induk'     => trim((string)($row[2] ?? '')),
                 'status'          => trim((string)($row[5] ?? '')),
@@ -257,15 +259,12 @@ class StudentManager extends Component
                 ]
             ];
 
-            // Buat nama akun wali
             $parentName = $bioDetails['data_ayah']['nama']
                 ?: ($bioDetails['data_ibu']['nama']
                     ?: 'Wali dari ' . $name);
 
-            // MASUKKAN KE PREPARED ARRAY UNTUK BATCH INSERT TRANSACTION
             try {
                 DB::transaction(function () use ($name, $nisn, $gender, $classroomId, $bioDetails, $parentName, $defaultPasswordHash, $now) {
-                    // 1. Simpan Siswa
                     $student = Student::create([
                         'name'         => $name,
                         'nisn'         => $nisn,
@@ -274,16 +273,14 @@ class StudentManager extends Component
                         'bio_details'  => $bioDetails,
                     ]);
 
-                    // 2. Buat Akun Wali (Username & Password = NISN)
                     $parentUser = User::create([
                         'name'     => $parentName,
-                        'username' => $nisn, // LOGIN DENGAN NISN SEBAGAI USERNAME
+                        'username' => $nisn,
                         'email'    => $nisn . '@sekolah.id',
-                        'password' => $defaultPasswordHash, // Hash pre-calculated
+                        'password' => $defaultPasswordHash,
                         'role'     => 'WaliMurid',
                     ]);
 
-                    // 3. Tautkan Akun Wali ke Siswa
                     DB::table('student_parents')->insert([
                         'user_id'    => $parentUser->id,
                         'student_id' => $student->id,
@@ -292,7 +289,6 @@ class StudentManager extends Component
                     ]);
                 });
 
-                // Tandai NISN sudah terpakai
                 $existingNisns[$nisn] = $nisn;
                 $successCount++;
             } catch (\Exception $e) {
@@ -333,6 +329,7 @@ class StudentManager extends Component
         session()->flash('success', 'Data murid berhasil dihapus!');
     }
 
+    // ACTION: Hapus Massal Siswa Terpilih
     public function deleteSelected()
     {
         if (empty($this->selectedStudents)) {
@@ -375,11 +372,14 @@ class StudentManager extends Component
 
     public function render()
     {
-        $students = $this->getStudentsQuery()->paginate(10);
+        $studentsQuery = $this->getStudentsQuery();
+        $totalStudents = $studentsQuery->count();
+        $students = $studentsQuery->paginate($this->perPage);
 
         return view('livewire.admin.student-manager', [
-            'students'   => $students,
-            'classrooms' => Classroom::orderBy('name')->get()
+            'students'      => $students,
+            'totalStudents' => $totalStudents,
+            'classrooms'    => Classroom::orderBy('name')->get()
         ]);
     }
 }

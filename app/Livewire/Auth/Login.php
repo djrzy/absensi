@@ -31,13 +31,13 @@ class Login extends Component
 
             // Redirect cerdas berdasarkan Role
             if ($user->role === 'Admin') {
-                return redirect()->intended('/admin/tahun-ajaran');
+                return redirect()->intended('/admin/dashboard');
             } elseif ($user->role === 'Guru') {
                 return redirect()->intended('/dashboard');
             } elseif ($user->role === 'Kepala') {
-                return redirect()->intended('/kepala-sekolah/dashboard'); // 👈 KEPALA SEKOLAH
+                return redirect()->intended('/kepala-sekolah/dashboard');
             } elseif ($user->role === 'WaliMurid') {
-                return redirect()->intended('/'); // Wali Murid
+                return redirect()->intended('/');
             }
 
             return redirect()->intended('/dashboard');
