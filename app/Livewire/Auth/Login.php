@@ -38,7 +38,7 @@ class Login extends Component
                 return redirect()->intended('/dashboard');
             }
 
-            return redirect()->intended('/parent/dashboard'); // Wali murid
+            return redirect()->intended('/'); // Wali murid
         }
 
         $this->addError('loginInput', 'Email / Username / NISN atau password salah.');
