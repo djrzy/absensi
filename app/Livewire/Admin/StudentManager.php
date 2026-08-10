@@ -4,10 +4,14 @@ namespace App\Livewire\Admin;
 
 use App\Models\Student;
 use App\Models\Classroom;
+use App\Models\AcademicYear;
+use App\Models\User;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class StudentManager extends Component
 {
@@ -23,6 +27,10 @@ class StudentManager extends Component
     public $filterClassroom = '';
     public $filterGender = '';
 
+    // Bulk Action State (Hapus Massal)
+    public $selectedStudents = [];
+    public $selectAll = false;
+
     // Impor Excel & Laporan State
     public $excelFile;
     public $importSummary = null;
@@ -30,14 +38,42 @@ class StudentManager extends Component
     public function updatingSearch()
     {
         $this->resetPage();
+        $this->resetBulkSelection();
     }
     public function updatingFilterClassroom()
     {
         $this->resetPage();
+        $this->resetBulkSelection();
     }
     public function updatingFilterGender()
     {
         $this->resetPage();
+        $this->resetBulkSelection();
+    }
+
+    public function updatedSelectAll($value)
+    {
+        if ($value) {
+            $this->selectedStudents = $this->getCurrentPageStudentIds();
+        } else {
+            $this->selectedStudents = [];
+        }
+    }
+
+    public function updatedPage()
+    {
+        $this->resetBulkSelection();
+    }
+
+    private function resetBulkSelection()
+    {
+        $this->selectedStudents = [];
+        $this->selectAll = false;
+    }
+
+    private function getCurrentPageStudentIds()
+    {
+        return $this->getStudentsQuery()->paginate(10)->pluck('id')->map(fn($id) => (string)$id)->toArray();
     }
 
     public function store()
@@ -74,10 +110,10 @@ class StudentManager extends Component
     public function importExcel()
     {
         $this->validate([
-            'excelFile' => 'required|mimes:xlsx,xls|max:10240', // Max 10MB
+            'excelFile' => 'required|mimes:xlsx,xls|max:10240',
         ], [
             'excelFile.required' => 'Silakan pilih file Excel terlebih dahulu.',
-            'excelFile.mimes' => 'Format file harus ekstensi .xlsx atau .xls',
+            'excelFile.mimes'    => 'Format file harus .xlsx atau .xls',
         ]);
 
         $filePath = $this->excelFile->getRealPath();
@@ -85,140 +121,179 @@ class StudentManager extends Component
         $sheet = $spreadsheet->getActiveSheet();
         $rows = $sheet->toArray();
 
+        // 1. PRE-FETCH CACHE IN MEMORY (Super Fast Lookup)
+        // Ambil daftar kelas yang ADA di DB: [ '26/27-VIIR' => id_kelas ]
+        $classroomsMap = Classroom::pluck('id', 'name')->toArray();
+
+        // Ambil seluruh NISN siswa yang sudah terdaftar untuk deteksi duplikasi instant
+        $existingNisns = Student::pluck('nisn', 'nisn')->toArray();
+
+        // Ambil seluruh Username/Email User yang sudah ada
+        $existingUsers = User::pluck('id', 'username')->toArray();
+
         $successCount = 0;
         $failedCount = 0;
         $failedDetails = [];
 
-        // Data dibaca mulai dari baris ke-4 (indeks array 3)
+        $studentsToInsert = [];
+        $usersToInsert = [];
+        $parentsToInsert = [];
+
+        $now = now()->toDateTimeString();
+        $defaultPasswordHash = Hash::make('password'); // Pre-hash sekali saja untuk hemat CPU
+
         foreach ($rows as $index => $row) {
-            if ($index < 4) continue; // Skip header template
+            if ($index < 4) continue; // Skip 4 baris header template
 
-            // 1. Ambil data utama dari kolom Excel
-            $nisn = trim((string)($row[28] ?? $row[2] ?? '')); // NISN (Col AC / Col C)
-            $name = trim((string)($row[3] ?? ''));             // Nama Siswa (Col D)
-            $genderRaw = strtoupper(trim((string)($row[8] ?? ''))); // Gender (Col I)
+            // SESUAI TEMPLATE EXCEL:
+            $nisn         = trim((string)($row[28] ?? $row[2] ?? '')); // NISN (Col AC / Col C)
+            $name         = trim((string)($row[3] ?? ''));             // Nama Siswa (Col D)
+            $classNameRaw = strtoupper(trim((string)($row[4] ?? ''))); // KODE KELAS (Col E - Indeks 4)
+            $genderRaw    = strtoupper(trim((string)($row[8] ?? ''))); // Gender (Col I - Indeks 8)
 
-            // Skip baris jika nama dan NISN kosong
             if (empty($name) && empty($nisn)) continue;
 
-            // Normalisasi Jenis Kelamin
-            $gender = 'L';
-            if (in_array($genderRaw, ['P', 'PEREMPUAN', 'PEREMPUAN '])) {
-                $gender = 'P';
-            }
+            $gender = in_array($genderRaw, ['P', 'PEREMPUAN']) ? 'P' : 'L';
 
-            // Validasi keberadaan NISN
+            // VALIDASI 1: NISN KOSONG
             if (empty($nisn)) {
                 $failedCount++;
-                $failedDetails[] = [
-                    'row' => $index + 1,
-                    'name' => $name ?: 'Tanpa Nama',
-                    'nisn' => '-',
-                    'reason' => 'NISN Kosong'
-                ];
+                $failedDetails[] = ['row' => $index + 1, 'name' => $name ?: 'Tanpa Nama', 'nisn' => '-', 'reason' => 'NISN Kosong'];
                 continue;
             }
 
-            // Validasi duplikasi NISN di database (Opsi D: Skip duplicate)
-            if (Student::where('nisn', $nisn)->exists()) {
+            // VALIDASI 2: DUPLIKASI NISN
+            if (isset($existingNisns[$nisn])) {
+                $failedCount++;
+                $failedDetails[] = ['row' => $index + 1, 'name' => $name, 'nisn' => $nisn, 'reason' => 'NISN Sudah Terdaftar (Duplikat)'];
+                continue;
+            }
+
+            // VALIDASI 3: CEK KELAS DI DATABASE (STRICT REQUIREMENT)
+            if (empty($classNameRaw) || !isset($classroomsMap[$classNameRaw])) {
                 $failedCount++;
                 $failedDetails[] = [
-                    'row' => $index + 1,
-                    'name' => $name,
-                    'nisn' => $nisn,
-                    'reason' => 'NISN Sudah Terdaftar (Duplikat)'
+                    'row'    => $index + 1,
+                    'name'   => $name,
+                    'nisn'   => $nisn,
+                    'reason' => "Kelas '{$classNameRaw}' Tidak Ditemukan di Database"
                 ];
-                continue;
+                continue; // LEWATKAN JIKA KELAS TIDAK ADA DI DATABASE
             }
 
-            // 2. Petakan sisa 70+ kolom ke dalam Array JSON (bio_details)
+            $classroomId = $classroomsMap[$classNameRaw];
+
+            // Format bio_details
             $bioDetails = [
-                'nomor_induk'        => trim((string)($row[2] ?? '')),
-                'status'             => trim((string)($row[5] ?? '')),
-                'tahun_masuk'        => trim((string)($row[6] ?? '')),
-                'tahun_lulus'        => trim((string)($row[7] ?? '')),
-                'tempat_lahir'       => trim((string)($row[9] ?? '')),
-                'tanggal_lahir'      => trim((string)($row[10] ?? '')),
-                'agama'              => trim((string)($row[11] ?? '')),
-                'kewarganegaraan'    => trim((string)($row[12] ?? '')),
-                'nik'                => trim((string)($row[13] ?? '')),
-                'no_kk'              => trim((string)($row[14] ?? '')),
-                'no_akta'            => trim((string)($row[15] ?? '')),
-                'anak_ke'            => trim((string)($row[16] ?? '')),
-                'jumlah_saudara'     => trim((string)($row[17] ?? '')),
-                'berat_badan'        => trim((string)($row[18] ?? '')),
-                'tinggi_badan'       => trim((string)($row[19] ?? '')),
-                'gol_darah'          => trim((string)($row[20] ?? '')),
-                'riwayat_penyakit'   => trim((string)($row[21] ?? '')),
-                'status_yatim'       => trim((string)($row[22] ?? '')),
-                'status_tinggal'     => trim((string)($row[23] ?? '')),
-                'jarak_tinggal'      => trim((string)($row[24] ?? '')),
-                'bahasa'             => trim((string)($row[25] ?? '')),
-                'hobi'               => trim((string)($row[26] ?? '')),
-                'cita_cita'          => trim((string)($row[27] ?? '')),
-                'no_ijazah_asal'     => trim((string)($row[29] ?? '')),
-                'sekolah_asal'       => trim((string)($row[30] ?? '')),
+                'nomor_induk'     => trim((string)($row[2] ?? '')),
+                'status'          => trim((string)($row[5] ?? '')),
+                'tahun_masuk'     => trim((string)($row[6] ?? '')),
+                'tahun_lulus'     => trim((string)($row[7] ?? '')),
+                'tempat_lahir'    => trim((string)($row[9] ?? '')),
+                'tanggal_lahir'   => trim((string)($row[10] ?? '')),
+                'agama'           => trim((string)($row[11] ?? '')),
+                'kewarganegaraan' => trim((string)($row[12] ?? '')),
+                'nik'             => trim((string)($row[13] ?? '')),
+                'no_kk'           => trim((string)($row[14] ?? '')),
+                'no_akta'         => trim((string)($row[15] ?? '')),
+                'anak_ke'         => trim((string)($row[16] ?? '')),
+                'jumlah_saudara'  => trim((string)($row[17] ?? '')),
+                'berat_badan'     => trim((string)($row[18] ?? '')),
+                'tinggi_badan'    => trim((string)($row[19] ?? '')),
+                'gol_darah'       => trim((string)($row[20] ?? '')),
+                'riwayat_penyakit' => trim((string)($row[21] ?? '')),
+                'status_yatim'    => trim((string)($row[22] ?? '')),
+                'status_tinggal'  => trim((string)($row[23] ?? '')),
+                'jarak_tinggal'   => trim((string)($row[24] ?? '')),
+                'bahasa'          => trim((string)($row[25] ?? '')),
+                'hobi'            => trim((string)($row[26] ?? '')),
+                'cita_cita'       => trim((string)($row[27] ?? '')),
+                'no_ijazah_asal'  => trim((string)($row[29] ?? '')),
+                'sekolah_asal'    => trim((string)($row[30] ?? '')),
 
-                // Alamat Tinggal Siswa
                 'alamat' => [
-                    'jalan'          => trim((string)($row[33] ?? '')),
-                    'kelurahan'      => trim((string)($row[34] ?? '')),
-                    'kecamatan'      => trim((string)($row[35] ?? '')),
-                    'kota'           => trim((string)($row[36] ?? '')),
-                    'provinsi'       => trim((string)($row[37] ?? '')),
-                    'telepon'        => trim((string)($row[38] ?? '')),
-                    'email'          => trim((string)($row[39] ?? '')),
+                    'jalan'     => trim((string)($row[33] ?? '')),
+                    'kelurahan' => trim((string)($row[34] ?? '')),
+                    'kecamatan' => trim((string)($row[35] ?? '')),
+                    'kota'      => trim((string)($row[36] ?? '')),
+                    'provinsi'  => trim((string)($row[37] ?? '')),
+                    'telepon'   => trim((string)($row[38] ?? '')),
                 ],
 
-                // Data Ayah Kandung
                 'data_ayah' => [
-                    'nama'           => trim((string)($row[40] ?? '')),
-                    'tempat_lahir'   => trim((string)($row[41] ?? '')),
-                    'tanggal_lahir'  => trim((string)($row[42] ?? '')),
-                    'agama'          => trim((string)($row[43] ?? '')),
-                    'nik'            => trim((string)($row[45] ?? '')),
-                    'pekerjaan'      => trim((string)($row[46] ?? '')),
-                    'penghasilan'    => trim((string)($row[47] ?? '')),
-                    'pendidikan'     => trim((string)($row[48] ?? '')),
-                    'status_hidup'   => trim((string)($row[49] ?? '')),
-                    'telepon'        => trim((string)($row[51] ?? '')),
+                    'nama'        => trim((string)($row[40] ?? '')),
+                    'tempat_lahir' => trim((string)($row[41] ?? '')),
+                    'tanggal_lahir' => trim((string)($row[42] ?? '')),
+                    'agama'       => trim((string)($row[43] ?? '')),
+                    'nik'         => trim((string)($row[45] ?? '')),
+                    'pekerjaan'   => trim((string)($row[46] ?? '')),
+                    'penghasilan' => trim((string)($row[47] ?? '')),
+                    'pendidikan'  => trim((string)($row[48] ?? '')),
+                    'status_hidup' => trim((string)($row[49] ?? '')),
+                    'telepon'     => trim((string)($row[51] ?? '')),
                 ],
 
-                // Data Ibu Kandung
                 'data_ibu' => [
-                    'nama'           => trim((string)($row[53] ?? '')),
-                    'tempat_lahir'   => trim((string)($row[54] ?? '')),
-                    'tanggal_lahir'  => trim((string)($row[55] ?? '')),
-                    'agama'          => trim((string)($row[56] ?? '')),
-                    'nik'            => trim((string)($row[58] ?? '')),
-                    'pekerjaan'      => trim((string)($row[59] ?? '')),
-                    'penghasilan'    => trim((string)($row[60] ?? '')),
-                    'pendidikan'     => trim((string)($row[61] ?? '')),
-                    'status_hidup'   => trim((string)($row[62] ?? '')),
-                    'telepon'        => trim((string)($row[64] ?? '')),
+                    'nama'        => trim((string)($row[53] ?? '')),
+                    'tempat_lahir' => trim((string)($row[54] ?? '')),
+                    'tanggal_lahir' => trim((string)($row[55] ?? '')),
+                    'agama'       => trim((string)($row[56] ?? '')),
+                    'nik'         => trim((string)($row[58] ?? '')),
+                    'pekerjaan'   => trim((string)($row[59] ?? '')),
+                    'penghasilan' => trim((string)($row[60] ?? '')),
+                    'pendidikan'  => trim((string)($row[61] ?? '')),
+                    'status_hidup' => trim((string)($row[62] ?? '')),
+                    'telepon'     => trim((string)($row[64] ?? '')),
                 ],
 
-                // Data Wali (Jika Ada)
                 'data_wali' => [
-                    'nama'           => trim((string)($row[66] ?? '')),
-                    'tempat_lahir'   => trim((string)($row[67] ?? '')),
-                    'tanggal_lahir'  => trim((string)($row[68] ?? '')),
-                    'nik'            => trim((string)($row[71] ?? '')),
-                    'pekerjaan'      => trim((string)($row[72] ?? '')),
-                    'status_hubungan' => trim((string)($row[75] ?? '')),
-                    'telepon'        => trim((string)($row[77] ?? '')),
+                    'nama'            => trim((string)($row[66] ?? '')),
+                    'tempat_lahir'    => trim((string)($row[67] ?? '')),
+                    'tanggal_lahir'   => trim((string)($row[68] ?? '')),
+                    'nik'             => trim((string)($row[71] ?? '')),
+                    'pekerjaan'       => trim((string)($row[72] ?? '')),
+                    'status_hubungan'  => trim((string)($row[75] ?? '')),
+                    'telepon'         => trim((string)($row[77] ?? '')),
                 ]
             ];
 
-            // 3. Simpan Ke Database
+            // Buat nama akun wali
+            $parentName = $bioDetails['data_ayah']['nama']
+                ?: ($bioDetails['data_ibu']['nama']
+                    ?: 'Wali dari ' . $name);
+
+            // MASUKKAN KE PREPARED ARRAY UNTUK BATCH INSERT TRANSACTION
             try {
-                Student::create([
-                    'name'         => $name,
-                    'nisn'         => $nisn,
-                    'gender'       => $gender,
-                    'classroom_id' => null, // Biarkan kosong dulu (ditugaskan lewat bulk assignment nanti)
-                    'bio_details'  => $bioDetails,
-                ]);
+                DB::transaction(function () use ($name, $nisn, $gender, $classroomId, $bioDetails, $parentName, $defaultPasswordHash, $now) {
+                    // 1. Simpan Siswa
+                    $student = Student::create([
+                        'name'         => $name,
+                        'nisn'         => $nisn,
+                        'gender'       => $gender,
+                        'classroom_id' => $classroomId,
+                        'bio_details'  => $bioDetails,
+                    ]);
+
+                    // 2. Buat Akun Wali (Username & Password = NISN)
+                    $parentUser = User::create([
+                        'name'     => $parentName,
+                        'username' => $nisn, // LOGIN DENGAN NISN SEBAGAI USERNAME
+                        'email'    => $nisn . '@sekolah.id',
+                        'password' => $defaultPasswordHash, // Hash pre-calculated
+                        'role'     => 'WaliMurid',
+                    ]);
+
+                    // 3. Tautkan Akun Wali ke Siswa
+                    DB::table('student_parents')->insert([
+                        'user_id'    => $parentUser->id,
+                        'student_id' => $student->id,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                });
+
+                // Tandai NISN sudah terpakai
+                $existingNisns[$nisn] = $nisn;
                 $successCount++;
             } catch (\Exception $e) {
                 $failedCount++;
@@ -226,12 +301,11 @@ class StudentManager extends Component
                     'row'    => $index + 1,
                     'name'   => $name,
                     'nisn'   => $nisn,
-                    'reason' => 'Gagal Simpan Database: ' . $e->getMessage()
+                    'reason' => 'Error DB: ' . $e->getMessage()
                 ];
             }
         }
 
-        // Catat Ringkasan Impor
         $this->importSummary = [
             'success' => $successCount,
             'failed'  => $failedCount,
@@ -239,7 +313,7 @@ class StudentManager extends Component
         ];
 
         $this->reset('excelFile');
-        session()->flash('success_import', 'Proses impor file Excel berhasil diselesaikan!');
+        session()->flash('success_import', 'Proses impor berhasil diselesaikan dengan cepat!');
     }
 
     public function edit($id)
@@ -259,14 +333,27 @@ class StudentManager extends Component
         session()->flash('success', 'Data murid berhasil dihapus!');
     }
 
+    public function deleteSelected()
+    {
+        if (empty($this->selectedStudents)) {
+            return;
+        }
+
+        $count = count($this->selectedStudents);
+        Student::whereIn('id', $this->selectedStudents)->delete();
+
+        $this->resetBulkSelection();
+        session()->flash('success', "Berhasil menghapus {$count} data murid sekaligus!");
+    }
+
     public function resetInputFields()
     {
         $this->reset(['name', 'nisn', 'gender', 'classroom_id', 'selectedStudentId', 'isEditMode']);
     }
 
-    public function render()
+    private function getStudentsQuery()
     {
-        $query = Student::with('classroom')
+        return Student::with('classroom')
             ->when($this->search, function ($q) {
                 $q->where(function ($subQuery) {
                     $subQuery->where('name', 'like', '%' . $this->search . '%')
@@ -284,9 +371,14 @@ class StudentManager extends Component
                 $q->where('gender', $this->filterGender);
             })
             ->orderBy('name', 'asc');
+    }
+
+    public function render()
+    {
+        $students = $this->getStudentsQuery()->paginate(10);
 
         return view('livewire.admin.student-manager', [
-            'students'   => $query->paginate(10),
+            'students'   => $students,
             'classrooms' => Classroom::orderBy('name')->get()
         ]);
     }

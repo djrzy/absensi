@@ -169,6 +169,22 @@
     <!-- KOLOM KANAN: Tabel Data Siswa -->
     <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden h-fit">
 
+        <div class="p-4 bg-gray-50/60 border-b border-gray-100 flex justify-between items-center gap-3">
+            <a href="/admin/penetapan-kelas"
+                class="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0">
+                <span>📌 Penetapan Massal →</span>
+            </a>
+
+            <!-- BARU: BILAH AKSI HAPUS MASSAL -->
+            @if (count($selectedStudents) > 0)
+                <button wire:click="deleteSelected"
+                    wire:confirm="Yakin ingin menghapus {{ count($selectedStudents) }} murid yang dipilih secara permanen?"
+                    class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
+                    <span>🗑️</span> Hapus {{ count($selectedStudents) }} Murid Terpilih
+                </button>
+            @endif
+        </div>
+
         <!-- Filter Bar -->
         <div class="p-4 bg-gray-50/60 border-b border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="relative">
@@ -205,6 +221,11 @@
                 <thead>
                     <tr
                         class="bg-gray-50/30 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <!-- BARU: MASTER CHECKBOX -->
+                        <th class="p-4 w-10 text-center">
+                            <input type="checkbox" wire:model.live="selectAll"
+                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                        </th>
                         <th class="p-4">Murid</th>
                         <th class="p-4">Kelas</th>
                         <th class="p-4 text-center">Aksi</th>
@@ -212,7 +233,14 @@
                 </thead>
                 <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
                     @forelse($students as $st)
-                        <tr class="hover:bg-gray-50/30 transition-colors">
+                        <tr
+                            class="hover:bg-gray-50/30 transition-colors {{ in_array((string) $st->id, $selectedStudents) ? 'bg-indigo-50/20' : '' }}">
+                            <!-- BARU: ROW CHECKBOX -->
+                            <td class="p-4 text-center">
+                                <input type="checkbox" wire:model.live="selectedStudents"
+                                    value="{{ $st->id }}"
+                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                            </td>
                             <td class="p-4">
                                 <a href="{{ route('admin.students.show', $st->id) }}"
                                     class="font-bold text-gray-900 hover:text-indigo-600 transition-colors block">
@@ -249,7 +277,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3" class="p-8 text-center text-gray-400 text-xs">
+                            <td colspan="4" class="p-8 text-center text-gray-400 text-xs">
                                 Tidak ditemukan murid dengan kriteria filter tersebut.
                             </td>
                         </tr>

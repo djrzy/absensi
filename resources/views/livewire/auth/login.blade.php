@@ -1,23 +1,23 @@
 <div class="min-h-screen h-dvh bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 items-center px-4">
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <h2 class="text-2xl font-bold text-gray-900 tracking-tight">Login</h2>
-        <p class="mt-1 text-xs text-gray-500">Silakan masuk menggunakan akun Anda</p>
+        <h2 class="text-2xl font-bold text-gray-900 tracking-tight">Login Portal</h2>
+        <p class="mt-1 text-xs text-gray-500">Masuk menggunakan Email, Username, atau NISN (Wali Murid)</p>
     </div>
 
     <div class="mt-6 w-full sm:mx-auto sm:max-w-md">
         <div class="bg-white py-8 px-6 shadow-xs border border-gray-100 rounded-2xl sm:px-10">
             <form wire:submit.prevent="login" class="space-y-4">
-                <!-- Field Email -->
+                <!-- Field Login (Email / Username / NISN) -->
                 <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Alamat Email</label>
-                    <input type="email" wire:model="email" placeholder="nama@sekolah.sch.id"
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email / Username / NISN</label>
+                    <input type="text" wire:model="loginInput" placeholder="Masukkan Email, Username, atau NISN"
                         class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all">
-                    @error('email')
+                    @error('loginInput')
                         <span class="text-xs text-rose-600 mt-1 block">{{ $message }}</span>
                     @enderror
                 </div>
 
-                <!-- Field Password dengan Alpine Toggle View -->
+                <!-- Field Password -->
                 <div x-data="{ showPassword: false }">
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
                     <div class="relative">
@@ -33,7 +33,6 @@
                     @enderror
                 </div>
 
-                <!-- Tombol Submit Login -->
                 <button type="submit" wire:loading.attr="disabled"
                     class="w-full mt-2 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2">
                     <span wire:loading.remove wire:target="login">Masuk ke Sistem</span>

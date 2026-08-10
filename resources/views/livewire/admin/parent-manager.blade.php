@@ -64,111 +64,66 @@
                     @enderror
                 </div>
 
-                <!-- OPTIMASI: SEARCHABLE COMBOBOX TAUTAN ANAK PERTAMA -->
-                <div class="space-y-1" x-data="{
-                    open: false,
-                    search: '',
-                    selectedId: @entangle('student_id'),
-                    selectedName: '',
-                    selectedClass: '',
-                    students: @js($studentsList),
-
-                    get filteredStudents() {
-                        if (this.search === '') return this.students;
-                        return this.students.filter(student =>
-                            student.name.toLowerCase().includes(this.search.toLowerCase()) ||
-                            (student.nisn && student.nisn.includes(this.search)) ||
-                            (student.classroom_name && student.classroom_name.toLowerCase().includes(this.search.toLowerCase()))
-                        );
-                    },
-
-                    selectStudent(student) {
-                        this.selectedId = student.id;
-                        this.selectedName = student.name;
-                        this.selectedClass = student.classroom_name || '-';
-                        this.open = false;
-                        this.search = '';
-                    },
-
-                    clearSelection() {
-                        this.selectedId = null;
-                        this.selectedName = '';
-                        this.selectedClass = '';
-                    },
-
-                    init() {
-                        this.$watch('selectedId', (val) => {
-                            if (!val) {
-                                this.selectedName = '';
-                                this.selectedClass = '';
-                            } else {
-                                const matched = this.students.find(s => s.id == val);
-                                if (matched) {
-                                    this.selectedName = matched.name;
-                                    this.selectedClass = matched.classroom_name || '-';
-                                }
-                            }
-                        });
-                    }
-                }" @click.away="open = false">
-
+                <!-- RINGKAS & INTERAKTIF: SEARCHABLE COMBOBOX TAUTAN ANAK PERTAMA -->
+                <div class="space-y-1" x-data="{ open: false }" @click.away="open = false">
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                         👦 Tautkan Anak Pertama <span class="text-gray-400 font-normal lowercase">(opsional)</span>:
                     </label>
 
                     <div class="relative">
-                        <button type="button" @click="open = !open"
-                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-left text-xs text-gray-800 flex items-center justify-between gap-2 hover:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer">
-                            <template x-if="selectedId">
-                                <div class="flex items-center justify-between w-full pr-1">
-                                    <div class="flex items-center gap-1.5 truncate">
-                                        <span class="font-bold text-gray-900 truncate" x-text="selectedName"></span>
-                                        <span
-                                            class="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-mono font-bold rounded border border-indigo-100"
-                                            x-text="selectedClass"></span>
-                                    </div>
-                                    <span @click.stop="clearSelection()"
-                                        class="text-gray-400 hover:text-rose-600 font-bold px-1">&times;</span>
+                        @if ($selectedStudent)
+                            <!-- BADGE SISWA TERPILIH RINGKAS -->
+                            <div
+                                class="w-full bg-indigo-50/70 border border-indigo-200 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+                                <div class="truncate pr-2">
+                                    <span
+                                        class="font-bold text-indigo-900 truncate block">{{ $selectedStudent->name }}</span>
+                                    <span class="text-[10px] text-indigo-600 font-mono">NISN:
+                                        {{ $selectedStudent->nisn ?? '-' }} • Kelas
+                                        {{ $selectedStudent->classroom->name ?? '-' }}</span>
                                 </div>
-                            </template>
-                            <template x-if="!selectedId">
-                                <span class="text-gray-400">🔍 Cari Nama Siswa / NISN / Kelas...</span>
-                            </template>
-                            <span x-if="!selectedId" class="text-gray-400 text-[10px] shrink-0"
-                                x-text="open ? '▲' : '▼'"></span>
-                        </button>
-
-                        <!-- POPUP LIST PENCARIAN -->
-                        <div x-show="open" x-cloak x-transition
-                            class="absolute left-0 right-0 mt-1 bg-white border border-gray-100 rounded-2xl shadow-2xl z-50 overflow-hidden space-y-2 p-2">
-
-                            <input type="text" x-model="search" x-ref="searchInput"
-                                x-effect="if(open) $nextTick(() => $refs.searchInput.focus())"
-                                placeholder="Ketik nama, NISN, atau kelas..."
-                                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all">
-
-                            <div class="max-h-52 overflow-y-auto divide-y divide-gray-50 text-xs">
-                                <template x-for="student in filteredStudents" :key="student.id">
-                                    <div @click="selectStudent(student)"
-                                        class="p-2 hover:bg-indigo-50/60 rounded-xl cursor-pointer transition-colors flex items-center justify-between gap-2"
-                                        :class="selectedId == student.id ? 'bg-indigo-50 font-bold' : ''">
-                                        <div class="truncate">
-                                            <div class="text-gray-900 font-semibold truncate" x-text="student.name">
-                                            </div>
-                                            <div class="text-[10px] text-gray-400 font-mono"
-                                                x-text="'NISN: ' + student.nisn"></div>
-                                        </div>
-                                        <span
-                                            class="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded font-mono shrink-0"
-                                            x-text="student.classroom_name"></span>
-                                    </div>
-                                </template>
-
-                                <template x-if="filteredStudents.length === 0">
-                                    <div class="p-3 text-center text-xs text-gray-400">Siswa tidak ditemukan</div>
-                                </template>
+                                <button type="button" wire:click="clearSelectedStudent"
+                                    class="text-indigo-400 hover:text-rose-600 font-bold px-1.5 py-0.5 text-sm cursor-pointer">
+                                    &times;
+                                </button>
                             </div>
-                        </div>
+                        @else
+                            <!-- BUTTON BUKA DROPDOWN -->
+                            <button type="button" @click="open = !open"
+                                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-left text-xs text-gray-400 flex items-center justify-between gap-2 hover:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer">
+                                <span>🔍 Klik untuk cari nama siswa...</span>
+                                <span class="text-[10px]" x-text="open ? '▲' : '▼'"></span>
+                            </button>
+
+                            <!-- POPUP DROPDOWN DEBOUNCED SEARCH -->
+                            <div x-show="open" x-cloak x-transition
+                                class="absolute left-0 right-0 mt-1 bg-white border border-gray-100 rounded-2xl shadow-2xl z-50 overflow-hidden p-2 space-y-2">
+
+                                <input type="text" wire:model.live.debounce.300ms="searchStudent"
+                                    placeholder="Ketik nama atau NISN..."
+                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all">
+
+                                <div class="max-h-48 overflow-y-auto divide-y divide-gray-50 text-xs">
+                                    @forelse ($searchedStudents as $st)
+                                        <div wire:click="selectStudent({{ $st->id }})" @click="open = false"
+                                            class="p-2 hover:bg-indigo-50/60 rounded-xl cursor-pointer transition-colors flex items-center justify-between gap-2">
+                                            <div class="truncate">
+                                                <div class="text-gray-900 font-semibold truncate">{{ $st->name }}
+                                                </div>
+                                                <div class="text-[10px] text-gray-400 font-mono">NISN:
+                                                    {{ $st->nisn }}</div>
+                                            </div>
+                                            <span
+                                                class="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded font-mono shrink-0">
+                                                {{ $st->classroom->name ?? '-' }}
+                                            </span>
+                                        </div>
+                                    @empty
+                                        <div class="p-3 text-center text-xs text-gray-400">Siswa tidak ditemukan</div>
+                                    @endforelse
+                                </div>
+                            </div>
+                        @endif
                     </div>
                 </div>
 
@@ -293,7 +248,7 @@
 
     </div>
 
-    <!-- ==================== OPTIMASI: MODAL SEARCHABLE SELECTION "+ TAUTKAN ANAK" ==================== -->
+    <!-- ==================== MODAL TAUTKAN ANAK RINGKAS ==================== -->
     <div x-show="openModal" x-cloak
         class="fixed inset-0 bg-gray-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
         @keydown.escape.window="openModal = false">
@@ -322,20 +277,19 @@
             @endif
 
             <!-- LIVE SEARCH INPUT INSIDE MODAL -->
-            <div class="space-y-3" x-data="{ searchModal: '', students: @js($studentsList) }">
+            <div class="space-y-3">
                 <div class="relative">
                     <span
                         class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-xs">🔍</span>
-                    <input type="text" x-model="searchModal" placeholder="Ketik nama anak, NISN, atau kelas..."
+                    <input type="text" wire:model.live.debounce.300ms="searchModalStudent"
+                        placeholder="Ketik nama anak, NISN..."
                         class="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs focus:bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all">
                 </div>
 
                 <!-- DAFTAR HASIL SISWA -->
                 <div class="max-h-64 overflow-y-auto space-y-2 pr-1">
-                    <template
-                        x-for="st in students.filter(s => searchModal === '' || s.name.toLowerCase().includes(searchModal.toLowerCase()) || s.nisn.includes(searchModal) || s.classroom_name.toLowerCase().includes(searchModal.toLowerCase()))"
-                        :key="st.id">
-                        <div @click="$wire.linkStudentById(st.id)"
+                    @forelse ($modalSearchedStudents as $st)
+                        <div wire:click="linkStudentById({{ $st->id }})"
                             class="p-3 bg-white hover:bg-indigo-50/60 border border-gray-100 hover:border-indigo-200 rounded-xl transition-all cursor-pointer flex justify-between items-center gap-3 group shadow-2xs">
 
                             <div class="flex items-center gap-2.5 truncate">
@@ -344,10 +298,10 @@
                                     👦
                                 </div>
                                 <div class="truncate">
-                                    <div class="text-xs font-bold text-gray-900 group-hover:text-indigo-900 truncate"
-                                        x-text="st.name"></div>
-                                    <div class="text-[10px] text-gray-400 font-mono"
-                                        x-text="'NISN: ' + st.nisn + ' • Kelas ' + st.classroom_name"></div>
+                                    <div class="text-xs font-bold text-gray-900 group-hover:text-indigo-900 truncate">
+                                        {{ $st->name }}</div>
+                                    <div class="text-[10px] text-gray-400 font-mono">NISN: {{ $st->nisn }} • Kelas
+                                        {{ $st->classroom->name ?? '-' }}</div>
                                 </div>
                             </div>
 
@@ -356,7 +310,9 @@
                                 + Tautkan
                             </button>
                         </div>
-                    </template>
+                    @empty
+                        <div class="p-4 text-center text-xs text-gray-400">Siswa tidak ditemukan</div>
+                    @endforelse
                 </div>
             </div>
 

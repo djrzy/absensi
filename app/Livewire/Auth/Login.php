@@ -7,20 +7,30 @@ use Illuminate\Support\Facades\Auth;
 
 class Login extends Component
 {
-    public $email;
-    public $password = 'password';
+    public $loginInput; // Bisa berisi Email, Username, atau NISN
+    public $password;
 
     public function login()
     {
         $this->validate([
-            'email' => 'required|email',
-            'password' => 'required',
+            'loginInput' => 'required|string',
+            'password'   => 'required',
+        ], [
+            'loginInput.required' => 'Email / Username / NISN wajib diisi.',
+            'password.required'   => 'Password wajib diisi.',
         ]);
 
-        if (Auth::attempt(['email' => $this->email, 'password' => $this->password])) {
+        // Deteksi apakah input berupa Format Email atau Username/NISN
+        $fieldType = filter_var($this->loginInput, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+
+        $credentials = [
+            $fieldType => $this->loginInput,
+            'password'  => $this->password,
+        ];
+
+        if (Auth::attempt($credentials)) {
             session()->regenerate();
 
-            // Redirect cerdas berdasarkan Role
             $user = Auth::user();
             if ($user->role === 'Admin') {
                 return redirect()->intended('/admin/tahun-ajaran');
@@ -28,16 +38,14 @@ class Login extends Component
                 return redirect()->intended('/dashboard');
             }
 
-            return redirect()->intended('/'); // Wali murid
+            return redirect()->intended('/parent/dashboard'); // Wali murid
         }
 
-        // Jika gagal, lempar error ke input email
-        $this->addError('email', 'Email atau password yang Anda masukkan salah.');
+        $this->addError('loginInput', 'Email / Username / NISN atau password salah.');
     }
 
     public function render()
     {
-        // Kita set layout kosong (blank) khusus login agar tidak memunculkan navbar utama aplikasi
         return view('livewire.auth.login')->layout('layouts.app');
     }
 }

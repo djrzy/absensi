@@ -14,13 +14,17 @@ class ParentManager extends Component
 {
     use WithPagination;
 
-    // Properti Form Input Akun Wali Utama (Left Container)
+    // Properti Form Input Akun Wali Utama
     public $name;
     public $email;
     public $password;
     public $student_id;
 
-    // Properti State Pencarian & Filter Kelas
+    // Properti Pencarian Combobox Anak Pertama & Modal
+    public $searchStudent = '';
+    public $searchModalStudent = '';
+
+    // Properti State Pencarian & Filter Tabel
     public $search = '';
     public $filterClassroom = '';
 
@@ -28,7 +32,6 @@ class ParentManager extends Component
     public $showLinkModal = false;
     public $targetParent = null;
     public $additional_student_id = null;
-    public $modalSearch = ''; // Search state khusus di dalam modal
 
     public function updatingSearch()
     {
@@ -38,6 +41,17 @@ class ParentManager extends Component
     public function updatingFilterClassroom()
     {
         $this->resetPage();
+    }
+
+    public function selectStudent($id)
+    {
+        $this->student_id = $id;
+        $this->searchStudent = '';
+    }
+
+    public function clearSelectedStudent()
+    {
+        $this->student_id = null;
     }
 
     public function store()
@@ -55,7 +69,6 @@ class ParentManager extends Component
         ]);
 
         DB::transaction(function () {
-            // 1. Buat User Account untuk Wali Murid
             $user = User::create([
                 'name' => $this->name,
                 'email' => $this->email,
@@ -63,7 +76,6 @@ class ParentManager extends Component
                 'role' => 'WaliMurid',
             ]);
 
-            // 2. Jika anak pertama dipilih, tautkan ke student_parents
             if ($this->student_id) {
                 DB::table('student_parents')->insert([
                     'user_id' => $user->id,
@@ -74,7 +86,7 @@ class ParentManager extends Component
             }
         });
 
-        $this->reset(['name', 'email', 'password', 'student_id']);
+        $this->reset(['name', 'email', 'password', 'student_id', 'searchStudent']);
         session()->flash('success', 'Akun Wali Murid berhasil dibuat!');
     }
 
@@ -82,7 +94,7 @@ class ParentManager extends Component
     {
         $this->targetParent = User::findOrFail($parentId);
         $this->additional_student_id = null;
-        $this->modalSearch = '';
+        $this->searchModalStudent = '';
         $this->showLinkModal = true;
     }
 
@@ -91,10 +103,9 @@ class ParentManager extends Component
         $this->showLinkModal = false;
         $this->targetParent = null;
         $this->additional_student_id = null;
-        $this->modalSearch = '';
+        $this->searchModalStudent = '';
     }
 
-    // Direct click tautkan anak dari daftar pencarian modal
     public function linkStudentById($studentId)
     {
         $this->additional_student_id = $studentId;
@@ -171,21 +182,33 @@ class ParentManager extends Component
             })
             ->orderBy('id', 'desc');
 
-        // Formatted Array ringan untuk Autocomplete Combobox Alpine.js
-        $studentsList = Student::with('classroom:id,name')
-            ->select('id', 'name', 'nisn', 'classroom_id')
+        // AMBIL HANYA 10 SISWA SESUAI PENCARIAN COMBOBOX UTAMA (SANGAT RINGAN)
+        $searchedStudents = Student::with('classroom:id,name')
+            ->when($this->searchStudent, function ($q) {
+                $q->where('name', 'like', '%' . $this->searchStudent . '%')
+                    ->orWhere('nisn', 'like', '%' . $this->searchStudent . '%');
+            })
             ->orderBy('name', 'asc')
-            ->get()
-            ->map(fn($s) => [
-                'id' => $s->id,
-                'name' => $s->name,
-                'nisn' => $s->nisn ?? '-',
-                'classroom_name' => $s->classroom->name ?? '-'
-            ]);
+            ->limit(10)
+            ->get();
+
+        // AMBIL HANYA 10 SISWA SESUAI PENCARIAN MODAL
+        $modalSearchedStudents = Student::with('classroom:id,name')
+            ->when($this->searchModalStudent, function ($q) {
+                $q->where('name', 'like', '%' . $this->searchModalStudent . '%')
+                    ->orWhere('nisn', 'like', '%' . $this->searchModalStudent . '%');
+            })
+            ->orderBy('name', 'asc')
+            ->limit(10)
+            ->get();
+
+        $selectedStudent = $this->student_id ? Student::with('classroom')->find($this->student_id) : null;
 
         return view('livewire.admin.parent-manager', [
             'parents' => $parentsQuery->paginate(10),
-            'studentsList' => $studentsList,
+            'searchedStudents' => $searchedStudents,
+            'modalSearchedStudents' => $modalSearchedStudents,
+            'selectedStudent' => $selectedStudent,
             'classrooms' => Classroom::orderBy('name', 'asc')->get()
         ]);
     }
