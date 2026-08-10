@@ -24,6 +24,13 @@ class SchoolDataSeeder extends Seeder
             'role' => 'Admin'
         ]);
 
+        $kepala_sekolah = User::create([
+            'name' => 'Kepala Sekolah',
+            'email' => 'kepala@school.id',
+            'password' => Hash::make('password'),
+            'role' => 'Kepala'
+        ]);
+
         $guru1 = User::create([
             'name' => 'Budi Santoso, S.Kom',
             'email' => 'guru@school.id',
@@ -129,23 +136,6 @@ class SchoolDataSeeder extends Seeder
             'nisn' => '0081234505',
             'name' => 'Eko Prasetyo',
             'gender' => 'L',
-        ]);
-
-        // Siswa Hasil Impor Excel (classroom_id = NULL) -> Siap di-Penetapan Kelas Massal
-        Student::create([
-            'classroom_id' => null,
-            'nisn' => '0081234506',
-            'name' => 'Fajri Ramadhan (Siswa Impor 1)',
-            'gender' => 'L',
-            'bio_details' => ['nomor_induk' => '202607006', 'tempat_lahir' => 'Jakarta']
-        ]);
-
-        Student::create([
-            'classroom_id' => null,
-            'nisn' => '0081234507',
-            'name' => 'Gita Gutawa (Siswa Impor 2)',
-            'gender' => 'P',
-            'bio_details' => ['nomor_induk' => '202607007', 'tempat_lahir' => 'Surabaya']
         ]);
 
         // 6. Akun Wali Murid (Disimulasikan Memiliki 2 Anak)

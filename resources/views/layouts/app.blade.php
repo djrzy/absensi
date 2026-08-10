@@ -124,6 +124,11 @@
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-blue-50/60 hover:text-blue-600 font-medium transition-colors">
                                 <span>🛡️</span> Pusat Piket
                             </a>
+                        @elseif (auth()->user()->role === 'Kepala')
+                            <a href="/kepala/dashboard"
+                                class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
+                                <span>📊</span> Dashboard Kepala Sekolah
+                            </a>
                         @else
                             <a href="/dashboard"
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-blue-50/60 hover:text-blue-600 font-medium transition-colors">

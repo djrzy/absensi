@@ -20,28 +20,30 @@ class Login extends Component
             'password.required'   => 'Password wajib diisi.',
         ]);
 
-        // Deteksi apakah input berupa Format Email atau Username/NISN
-        $fieldType = filter_var($this->loginInput, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        // Fleksibel: Coba autentikasi menggunakan Email ATAU Username/NISN
+        $isEmail = filter_var($this->loginInput, FILTER_VALIDATE_EMAIL);
+        $field = $isEmail ? 'email' : 'username';
 
-        $credentials = [
-            $fieldType => $this->loginInput,
-            'password'  => $this->password,
-        ];
-
-        if (Auth::attempt($credentials)) {
+        if (Auth::attempt([$field => $this->loginInput, 'password' => $this->password])) {
             session()->regenerate();
 
             $user = Auth::user();
+
+            // Redirect cerdas berdasarkan Role
             if ($user->role === 'Admin') {
                 return redirect()->intended('/admin/tahun-ajaran');
             } elseif ($user->role === 'Guru') {
                 return redirect()->intended('/dashboard');
+            } elseif ($user->role === 'Kepala') {
+                return redirect()->intended('/'); // 👈 KEPALA SEKOLAH
+            } elseif ($user->role === 'WaliMurid') {
+                return redirect()->intended('/'); // Wali Murid
             }
 
-            return redirect()->intended('/'); // Wali murid
+            return redirect()->intended('/dashboard');
         }
 
-        $this->addError('loginInput', 'Email / Username / NISN atau password salah.');
+        $this->addError('loginInput', 'Email / Username / NISN atau password yang Anda masukkan salah.');
     }
 
     public function render()

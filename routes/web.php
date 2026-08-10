@@ -13,6 +13,7 @@ use App\Livewire\Admin\StudentManager;
 use App\Livewire\Admin\SubjectManager;
 use App\Livewire\Admin\TeacherManager;
 use App\Livewire\Auth\Login;
+use App\Livewire\HeadmasterDashboard;
 use App\Livewire\ParentDashboard;
 use App\Livewire\TakeAttendance;
 use App\Livewire\Teacher\ClassroomWaliReport;
@@ -56,6 +57,10 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:WaliMurid')->group(function () {
         Route::get('/', ParentDashboard::class)->name('parent.dashboard');
+    });
+
+    Route::middleware('role:Kepala')->group(function () {
+        Route::get('/', HeadmasterDashboard::class)->name('headmaster.dashboard');
     });
 
     // Fitur Logout Singkat
