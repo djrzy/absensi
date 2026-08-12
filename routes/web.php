@@ -4,7 +4,6 @@ use App\Livewire\Admin\AcademicYearManager;
 use App\Livewire\Admin\AdminDashboard;
 use App\Livewire\Admin\AttendanceReport;
 use App\Livewire\Admin\BulkStudentAssignment;
-use App\Livewire\Admin\CalendarManager;
 use App\Livewire\Admin\ClassPromotionManager;
 use App\Livewire\Admin\ClassroomManager;
 use App\Livewire\Admin\ParentManager;
@@ -14,6 +13,7 @@ use App\Livewire\Admin\StudentManager;
 use App\Livewire\Admin\SubjectManager;
 use App\Livewire\Admin\TeacherManager;
 use App\Livewire\Auth\Login;
+use App\Livewire\Auth\ProfileSettings;
 use App\Livewire\HeadmasterDashboard;
 use App\Livewire\ParentDashboard;
 use App\Livewire\TakeAttendance;
@@ -59,6 +59,7 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:WaliMurid')->group(function () {
         Route::get('/', ParentDashboard::class)->name('parent.dashboard');
+        Route::get('/parent/pengaturan', ProfileSettings::class)->name('parent.settings');
     });
 
     Route::middleware('role:Kepala')->group(function () {

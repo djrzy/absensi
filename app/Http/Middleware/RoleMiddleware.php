@@ -18,7 +18,7 @@ class RoleMiddleware
         // Cek apakah role user saat ini ada di dalam daftar role yang diizinkan
         if (!in_array($request->user()->role, $roles)) {
             // Jika tidak punya akses, kembalikan ke dashboard default masing-masing
-            if ($request->user()->role === 'Admin') return redirect('/admin/kelas');
+            if ($request->user()->role === 'Admin') return redirect('/admin/dashboard');
             if ($request->user()->role === 'Guru') return redirect('/dashboard');
             return redirect('/'); // Wali murid
         }

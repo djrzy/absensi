@@ -276,7 +276,7 @@ class StudentManager extends Component
                     $parentUser = User::create([
                         'name'     => $parentName,
                         'username' => $nisn,
-                        'email'    => $nisn . '@sekolah.id',
+                        'email'    => $nisn . '@mapusat.id',
                         'password' => $defaultPasswordHash,
                         'role'     => 'WaliMurid',
                     ]);

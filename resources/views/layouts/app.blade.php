@@ -24,7 +24,14 @@
             class="bg-white border-b border-gray-200 py-3 px-4 sm:px-6 flex justify-between items-center shadow-xs sticky top-0 z-40">
             <!-- Brand / Title -->
             <div class="flex items-center gap-3">
-                <span class="font-bold text-gray-900 tracking-tight text-sm sm:text-base">Modul Absensi</span>
+                <img src="{{ asset('logo.png') }}" class="w-28 h-10 object-fill" />
+                <div class="flex flex-col">
+                    <span class="text-gray-900 tracking-tight text-xs sm:text-xs w-40 lg:w-full leading-tight">Presensi
+                        Siswa Perguruan
+                        Mathla'ul Anwar Pusat Menes</span>
+                    <span class="font-bold text-gray-900 tracking-tight text-sm sm:text-base">MTs MA Pusat Menes</span>
+                </div>
+                {{-- <span class="font-bold text-gray-900 tracking-tight text-sm sm:text-base">Modul Absensi</span> --}}
             </div>
 
             <!-- User Info & Dropdown Navigation -->
@@ -137,6 +144,10 @@
                             <a href="/dashboard"
                                 class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-blue-50/60 hover:text-blue-600 font-medium transition-colors">
                                 <span>📈</span> Dashboard
+                            </a>
+                            <a href="/parent/pengaturan"
+                                class="flex items-center gap-2.5 px-4 py-2 text-gray-700 hover:bg-indigo-50/60 hover:text-indigo-600 font-medium transition-colors">
+                                <span>⚙️</span> Pengaturan Akun
                             </a>
                         @endif
 
