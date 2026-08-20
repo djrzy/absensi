@@ -1,10 +1,18 @@
 <div class="min-h-screen h-dvh bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 items-center px-4">
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <h2 class="text-2xl font-bold text-gray-900 tracking-tight">Login Portal</h2>
-        <p class="mt-1 text-xs text-gray-500">Masuk menggunakan Email, Username, atau NISN (Wali Murid)</p>
+        <img src="{{ asset('logo.png') }}" alt="Logo" class="w-[85%] mx-auto">
+        <p class="mt-3 text-gray-800 w-full lg:w-[80%] mx-auto leading-snug font-semibold text-lg">
+            Sistem
+            Informasi
+            dan
+            Administrasi <br>
+            Perguruan Mathla'ul
+            Anwar Pusat
+            Menes</p>
     </div>
 
     <div class="mt-6 w-full sm:mx-auto sm:max-w-md">
+
         <div class="bg-white py-8 px-6 shadow-xs border border-gray-100 rounded-2xl sm:px-10">
             <form wire:submit.prevent="login" class="space-y-4">
                 <!-- Field Login (Email / Username / NISN) -->
